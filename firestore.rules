@@ -1,0 +1,181 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isEditor() {
+      return signedIn() &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isEditor == true;
+    }
+
+    function isAdmin() {
+      return signedIn() &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isAdmin == true;
+    }
+
+    function isEligibleUser() {
+      return signedIn() &&
+          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isWomanConfirmed == true;
+    }
+
+    match /users/{userId} {
+      allow read: if signedIn() && (request.auth.uid == userId || isAdmin());
+
+      // Regular users can manage their own profile doc, but cannot elevate role fields.
+      allow create: if signedIn() &&
+          request.auth.uid == userId &&
+          !request.resource.data.keys().hasAny(['isEditor', 'isAdmin']);
+
+      allow update: if signedIn() && (
+          isAdmin() ||
+          (request.auth.uid == userId &&
+              !request.resource.data
+                  .diff(resource.data)
+                  .changedKeys()
+                  .hasAny(['isEditor', 'isAdmin']))
+      );
+
+      allow delete: if signedIn() && (request.auth.uid == userId || isAdmin());
+    }
+
+    match /users/{userId}/notificationReads/{notificationId} {
+      allow read, create, update, delete: if isEligibleUser() && request.auth.uid == userId;
+    }
+
+    // Minimal email → uid mapping for DM / group invites (no emergency contacts, etc.).
+    match /userDirectory/{userId} {
+      allow read: if isEligibleUser();
+      allow create, update: if signedIn() &&
+          request.auth.uid == userId &&
+          request.resource.data.uid == userId &&
+          request.resource.data.email is string;
+      allow delete: if signedIn() && request.auth.uid == userId;
+    }
+
+    // usernameKey must be lowercase [a-z0-9_]{3,30}; doc id is the lookup key.
+    match /usernames/{usernameKey} {
+      allow read: if isEligibleUser();
+      allow create: if isEligibleUser() &&
+          usernameKey.matches('^[a-z0-9_]{3,30}$') &&
+          !exists(/databases/$(database)/documents/usernames/$(usernameKey)) &&
+          request.resource.data.uid == request.auth.uid &&
+          request.resource.data.usernameLower == usernameKey &&
+          request.resource.data.keys().hasAll(['uid', 'usernameLower']) &&
+          (
+            request.resource.data.keys().hasOnly(['uid', 'usernameLower']) ||
+            (
+              request.resource.data.keys().hasOnly(['uid', 'usernameLower', 'displayName']) &&
+              request.resource.data.displayName is string
+            )
+          );
+      allow update: if isEligibleUser() &&
+          resource.data.uid == request.auth.uid &&
+          request.resource.data.uid == resource.data.uid &&
+          request.resource.data.usernameLower == usernameKey &&
+          resource.data.usernameLower == usernameKey &&
+          request.resource.data.diff(resource.data).changedKeys().hasOnly(['displayName']);
+      allow delete: if isEligibleUser() && resource.data.uid == request.auth.uid;
+    }
+
+    match /articles/{articleId} {
+      allow read: if isEligibleUser();
+      allow create, update, delete: if isEligibleUser() && (isEditor() || isAdmin());
+    }
+
+    match /notifications/{notificationId} {
+      allow read: if isEligibleUser() &&
+          (
+            resource.data.targetUid == null ||
+            resource.data.targetUid == request.auth.uid
+          );
+      allow create: if isEligibleUser() &&
+          request.resource.data.createdByUid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    match /communityPosts/{postId} {
+      allow read: if isEligibleUser();
+      allow create: if isEligibleUser() &&
+          request.resource.data.authorUid == request.auth.uid &&
+          (
+            !request.resource.data.keys().hasAny(['authorPhotoUrl']) ||
+            request.resource.data.authorPhotoUrl is string
+          ) &&
+          request.resource.data.likesCount == 0 &&
+          request.resource.data.commentsCount == 0;
+      allow update: if isEligibleUser() &&
+          (
+            request.auth.uid == resource.data.authorUid ||
+            isAdmin() ||
+            (
+              request.resource.data.authorUid == resource.data.authorUid &&
+              request.resource.data.author == resource.data.author &&
+              request.resource.data.authorPhotoUrl == resource.data.authorPhotoUrl &&
+              request.resource.data.role == resource.data.role &&
+              request.resource.data.content == resource.data.content &&
+              request.resource.data.tag == resource.data.tag &&
+              request.resource.data.createdAt == resource.data.createdAt
+            )
+          );
+      allow delete: if isEligibleUser() &&
+          (request.auth.uid == resource.data.authorUid || isAdmin());
+    }
+
+    match /communityPosts/{postId}/likes/{userId} {
+      allow read: if isEligibleUser();
+      allow create, update: if isEligibleUser() && request.auth.uid == userId;
+      allow delete: if isEligibleUser() && request.auth.uid == userId;
+    }
+
+    match /communityPosts/{postId}/comments/{commentId} {
+      allow read: if isEligibleUser();
+      allow create: if isEligibleUser() &&
+          request.resource.data.authorUid == request.auth.uid;
+      allow update: if false;
+      allow delete: if isEligibleUser() &&
+          (request.auth.uid == resource.data.authorUid || isAdmin());
+    }
+
+    match /chatRooms/{roomId} {
+      allow read: if isEligibleUser() &&
+          request.auth.uid in resource.data.members;
+      allow create: if isEligibleUser() &&
+          request.resource.data.createdBy == request.auth.uid &&
+          request.auth.uid in request.resource.data.members &&
+          request.resource.data.members is list &&
+          request.resource.data.members.size() >= 2 &&
+          request.resource.data.type in ['direct', 'group'];
+      allow update: if isEligibleUser() &&
+          request.auth.uid in resource.data.members &&
+          !request.resource.data.diff(resource.data).changedKeys().hasAny([
+            'createdAt',
+            'createdBy',
+            'type',
+            'directKey'
+          ]) &&
+          (
+            request.resource.data.members == resource.data.members ||
+            (
+              resource.data.type == 'group' &&
+              request.auth.uid == resource.data.createdBy
+            )
+          );
+      allow delete: if false;
+    }
+
+    match /chatRooms/{roomId}/messages/{messageId} {
+      allow read: if isEligibleUser() &&
+          request.auth.uid in get(/databases/$(database)/documents/chatRooms/$(roomId)).data.members;
+      allow create: if isEligibleUser() &&
+          request.auth.uid in get(/databases/$(database)/documents/chatRooms/$(roomId)).data.members &&
+          request.resource.data.senderUid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
