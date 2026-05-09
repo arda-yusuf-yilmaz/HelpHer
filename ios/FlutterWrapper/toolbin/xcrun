@@ -1,0 +1,36 @@
+#!/bin/sh
+if [ "$1" = "--show-sdk-path" ] && [ "$2" = "--sdk" ] && [ -n "$3" ]; then
+    output="$(/usr/bin/xcrun "$@" 2>/dev/null)"
+    status=$?
+    if [ "$status" -eq 0 ] && [ -n "$output" ]; then
+        printf '%s\n' "$output"
+        exit 0
+    fi
+
+    developer_dir="${DEVELOPER_DIR:-/Applications/Xcode.app/Contents/Developer}"
+    case "$3" in
+        iphoneos)
+            sdk_glob="$developer_dir/Platforms/iPhoneOS.platform/Developer/SDKs/iPhoneOS"'*.sdk'
+            ;;
+        iphonesimulator)
+            sdk_glob="$developer_dir/Platforms/iPhoneSimulator.platform/Developer/SDKs/iPhoneSimulator"'*.sdk'
+            ;;
+        macosx)
+            sdk_glob="$developer_dir/Platforms/MacOSX.platform/Developer/SDKs/MacOSX"'*.sdk'
+            ;;
+        *)
+            exit "${status:-1}"
+            ;;
+    esac
+
+    for sdk in $sdk_glob; do
+        if [ -d "$sdk" ]; then
+            printf '%s\n' "$sdk"
+            exit 0
+        fi
+    done
+
+    exit "${status:-1}"
+fi
+
+exec /usr/bin/xcrun "$@"

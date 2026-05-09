@@ -1,0 +1,3 @@
+FLUTTER_ROOT=$(SRCROOT)/FlutterWrapper
+DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer
+PATH=/usr/bin:/bin:/usr/sbin:/sbin$(inherited)

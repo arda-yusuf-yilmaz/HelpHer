@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Workspace
+   version = "1.0">
+   <FileRef
+      location = "group:Runner.xcodeproj">
+   </FileRef>
+   <Group
+      location = "group:FlutterWrapper"
+      name = "FlutterWrapper">
+      <Group
+         location = "group:packages"
+         name = "packages">
+         <Group
+            location = "group:flutter_tools"
+            name = "flutter_tools">
+            <Group
+               location = "group:bin"
+               name = "bin">
+               <FileRef
+                  location = "group:xcode_backend.sh">
+               </FileRef>
+            </Group>
+         </Group>
+      </Group>
+      <Group
+         location = "group:toolbin"
+         name = "toolbin">
+         <FileRef
+            location = "group:xcrun">
+         </FileRef>
+      </Group>
+   </Group>
+   <FileRef
+      location = "group:Pods/Pods.xcodeproj">
+   </FileRef>
+</Workspace>

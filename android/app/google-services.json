@@ -1,0 +1,54 @@
+{
+  "project_info": {
+    "project_number": "84736062319",
+    "project_id": "helpher-30b70",
+    "storage_bucket": "helpher-30b70.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:84736062319:android:ad76082cf8260904faae9a",
+        "android_client_info": {
+          "package_name": "com.example.helpher"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "84736062319-06fin3fv3dnvgr8r6grj3jfjjc1babei.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.example.helpher",
+            "certificate_hash": "3f7d721635a06c358794e84c0f8fb6080757b072"
+          }
+        },
+        {
+          "client_id": "84736062319-3120ckvbk4t8bsh0ve2h7cpm3s3mls2m.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCDxaGhgOcKQ84HN2a_KHMgeXZu6Dd44go"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "84736062319-3120ckvbk4t8bsh0ve2h7cpm3s3mls2m.apps.googleusercontent.com",
+              "client_type": 3
+            },
+            {
+              "client_id": "84736062319-va2jh6u51bd2n2ueqqtv9dqicgtg8jks.apps.googleusercontent.com",
+              "client_type": 2,
+              "ios_info": {
+                "bundle_id": "com.example.helpher"
+              }
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
