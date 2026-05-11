@@ -33,19 +33,28 @@ jobs:
       - name: Build Windows release
         run: flutter build windows --release
 
-      - name: Package Windows build (zip)
+      - name: Install Inno Setup
+        shell: pwsh
+        run: |
+          choco install innosetup -y
+
+      - name: Build Windows installer (Inno Setup)
         shell: pwsh
         run: |
           $tag = "${{ github.ref_name }}"
-          $zip = "HelpHer-$tag-windows-x64.zip"
-          Compress-Archive -Path "build/windows/x64/runner/Release/*" -DestinationPath $zip
-          Write-Output "Created $zip"
+          $version = $tag.TrimStart("v")
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" `
+            "installer/windows/helpher.iss" `
+            "/DSourceDir=build/windows/x64/runner/Release" `
+            "/DAppVersion=$version" `
+            "/DOutputBaseFilename=HelpHer-$tag-Setup-Windows-x64"
 
-      - name: Upload Windows asset
+      - name: Upload Windows installer
         uses: actions/upload-artifact@v4
         with:
-          name: windows-zip
-          path: HelpHer-*-windows-x64.zip
+          name: windows-installer
+          path: dist/*.exe
 
   build-macos:
     runs-on: macos-latest
@@ -71,44 +80,49 @@ jobs:
       - name: Build macOS release
         run: flutter build macos --release
 
-      - name: Package macOS build (zip)
+      - name: Package macOS build (dmg)
         run: |
           set -euo pipefail
           TAG="${GITHUB_REF_NAME}"
           APP_PATH="build/macos/Build/Products/Release/helpher.app"
-          ZIP="HelpHer-${TAG}-macos.zip"
+          DMG="HelpHer-${TAG}-macOS.dmg"
           if [ ! -d "${APP_PATH}" ]; then
             echo "Expected app not found at ${APP_PATH}"
             exit 1
           fi
-          ditto -c -k --sequesterRsrc --keepParent "${APP_PATH}" "${ZIP}"
-          echo "Created ${ZIP}"
+          mkdir -p dist
+          STAGE="$(mktemp -d)"
+          cp -R "${APP_PATH}" "${STAGE}/"
+          ln -s /Applications "${STAGE}/Applications"
+          hdiutil create -volname "HelpHer" -srcfolder "${STAGE}" -ov -format UDZO "dist/${DMG}"
+          echo "Created dist/${DMG}"
 
-      - name: Upload macOS asset
+      - name: Upload macOS dmg
         uses: actions/upload-artifact@v4
         with:
-          name: macos-zip
-          path: HelpHer-*-macos.zip
+          name: macos-dmg
+          path: dist/*.dmg
 
   release:
     runs-on: ubuntu-latest
     needs: [build-windows, build-macos]
     steps:
-      - name: Download Windows asset
+      - name: Download Windows installer
         uses: actions/download-artifact@v4
         with:
-          name: windows-zip
+          name: windows-installer
           path: dist
 
-      - name: Download macOS asset
+      - name: Download macOS dmg
         uses: actions/download-artifact@v4
         with:
-          name: macos-zip
+          name: macos-dmg
           path: dist
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/*.zip
+            dist/*.exe
+            dist/*.dmg
           generate_release_notes: true
