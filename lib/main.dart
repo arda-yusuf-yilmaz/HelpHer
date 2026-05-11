@@ -19,6 +19,13 @@ const kWebAppCheckRecaptchaSiteKey = String.fromEnvironment(
   'RECAPTCHA_SITE_KEY',
 );
 
+bool isComputerPlatform(TargetPlatform platform) {
+  if (kIsWeb) return true;
+  return platform == TargetPlatform.macOS ||
+      platform == TargetPlatform.windows ||
+      platform == TargetPlatform.linux;
+}
+
 /// Normalizes a HelpHer username: trim, optional leading `@`, lowercase, [a-z0-9_]{3,30}.
 String? normalizeHelpherUsernameKey(String raw) {
   var s = raw.trim().toLowerCase();
@@ -1832,7 +1839,9 @@ class _MainShellState extends State<MainShell>
                   ],
                 );
 
-                final isWideWeb = kIsWeb && MediaQuery.of(context).size.width >= 980;
+                final isComputer = isComputerPlatform(Theme.of(context).platform);
+                final isWideComputer =
+                    isComputer && MediaQuery.of(context).size.width >= 980;
 
                 Widget buildContent({required bool constrain}) {
                   final content = AnimatedBuilder(
@@ -1889,7 +1898,7 @@ class _MainShellState extends State<MainShell>
                       clipBehavior: Clip.none,
                       children: [
                         iconWidget,
-                        Positioned(right: -6, top: -4, child: badge!),
+                        Positioned(right: -6, top: -4, child: badge),
                       ],
                     );
                   }
@@ -1922,7 +1931,7 @@ class _MainShellState extends State<MainShell>
                     : null;
 
                 return Scaffold(
-                  body: isWideWeb
+                  body: isWideComputer
                       ? Row(
                           children: [
                             NavigationRail(
@@ -1977,8 +1986,8 @@ class _MainShellState extends State<MainShell>
                             Expanded(child: buildContent(constrain: true)),
                           ],
                         )
-                      : buildContent(constrain: kIsWeb),
-                  bottomNavigationBar: (isWideWeb)
+                      : buildContent(constrain: isComputer),
+                  bottomNavigationBar: (isWideComputer)
                       ? null
                       : (isIOS
                           ? Theme(
@@ -2022,13 +2031,14 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final isComputer = isComputerPlatform(Theme.of(context).platform);
     return SingleChildScrollView(
       child: Column(
         children: [
           _buildHeader(),
-          if (kIsWeb) _buildLandingBanner(context),
+          if (isComputer) _buildLandingBanner(context),
           _buildSectionTitle('Quick Functions', top: 20),
-          _buildQuickActions(),
+          _buildQuickActions(context),
           _buildSectionTitle('Featured Articles'),
           ...featuredArticles.map(
             (article) => ArticleCard(
@@ -2220,10 +2230,12 @@ class HomeScreen extends StatelessWidget {
     return 'Good evening';
   }
 
-  Widget _buildQuickActions() {
+  Widget _buildQuickActions(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-      child: kIsWeb ? _buildQuickActionsWeb() : _buildQuickActionsDefault(),
+      child: isComputerPlatform(Theme.of(context).platform)
+          ? _buildQuickActionsWeb()
+          : _buildQuickActionsDefault(),
     );
   }
 
