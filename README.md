@@ -1,7 +1,7 @@
 # HelpHer Web App
 
-<<<<<<< HEAD
 HelpHer is a Flutter + Firebase application with full web support.
+It is designed to help women navigate daily safety, support, and community needs.
 
 ## Prerequisites
 
@@ -48,6 +48,3 @@ If Google sign-in fails in web mode:
 - `lib/firebase_options.dart`: Firebase app configuration
 - `web/`: web shell files (`index.html`, `manifest.json`, icons)
 - `functions/`: Firebase Cloud Functions backend code
-=======
-An app designed for helping women with their daily struggles.
->>>>>>> b13ebada0276c5dc06baa8aa8c61447a80cb2760
