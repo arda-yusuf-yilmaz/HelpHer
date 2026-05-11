@@ -486,6 +486,11 @@ class _AuthGateState extends State<AuthGate> {
     }
     setState(() => _isSigningIn = true);
     try {
+      if (kIsWeb) {
+        await _firebaseAuth.signInWithPopup(GoogleAuthProvider());
+        _clearMessage();
+        return;
+      }
       if (!kIsWeb && defaultTargetPlatform == TargetPlatform.macOS) {
         try {
           await _firebaseAuth.signInWithProvider(GoogleAuthProvider());
@@ -572,7 +577,9 @@ class _AuthGateState extends State<AuthGate> {
 
   Future<void> _signOut() async {
     await _firebaseAuth.signOut();
-    await _googleSignIn.signOut();
+    if (!kIsWeb) {
+      await _googleSignIn.signOut();
+    }
   }
 
   Future<void> _syncUserProfileDoc(User user) async {
@@ -1825,8 +1832,10 @@ class _MainShellState extends State<MainShell>
                   ],
                 );
 
-                return Scaffold(
-                  body: AnimatedBuilder(
+                final isWideWeb = kIsWeb && MediaQuery.of(context).size.width >= 980;
+
+                Widget buildContent({required bool constrain}) {
+                  final content = AnimatedBuilder(
                     animation: _tabEntranceController,
                     child: PageView(
                       controller: _pageController,
@@ -1849,17 +1858,138 @@ class _MainShellState extends State<MainShell>
                         ),
                       );
                     },
-                  ),
-                  bottomNavigationBar: isIOS
-                      ? Theme(
-                          data: Theme.of(context).copyWith(
-                            splashFactory: NoSplash.splashFactory,
-                            highlightColor: Colors.transparent,
-                            splashColor: Colors.transparent,
+                  );
+
+                  if (!constrain) {
+                    return content;
+                  }
+
+                  return Center(
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxWidth: 1120),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 20),
+                        child: content,
+                      ),
+                    ),
+                  );
+                }
+
+                NavigationRailDestination railDestination({
+                  required IconData icon,
+                  required IconData selectedIcon,
+                  required String label,
+                  Widget? badge,
+                }) {
+                  final baseIcon = Icon(icon);
+                  final baseSelectedIcon = Icon(selectedIcon);
+                  Widget withBadge(Widget iconWidget) {
+                    if (badge == null) return iconWidget;
+                    return Stack(
+                      clipBehavior: Clip.none,
+                      children: [
+                        iconWidget,
+                        Positioned(right: -6, top: -4, child: badge!),
+                      ],
+                    );
+                  }
+
+                  return NavigationRailDestination(
+                    icon: withBadge(baseIcon),
+                    selectedIcon: withBadge(baseSelectedIcon),
+                    label: Text(label),
+                  );
+                }
+
+                final chatBadge = unreadChatsCount > 0
+                    ? Container(
+                        constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
+                        padding: const EdgeInsets.symmetric(horizontal: 4),
+                        decoration: BoxDecoration(
+                          color: AppColors.brand,
+                          borderRadius: BorderRadius.circular(10),
+                        ),
+                        child: Text(
+                          unreadChatsCount > 9 ? '9+' : '$unreadChatsCount',
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.w700,
                           ),
-                          child: bottomNav,
+                        ),
+                      )
+                    : null;
+
+                return Scaffold(
+                  body: isWideWeb
+                      ? Row(
+                          children: [
+                            NavigationRail(
+                              selectedIndex: _currentIndex,
+                              onDestinationSelected: (index) =>
+                                  _switchTab(index, animated: true),
+                              labelType: NavigationRailLabelType.all,
+                              backgroundColor: Colors.white,
+                              selectedIconTheme: const IconThemeData(
+                                color: AppColors.brand,
+                              ),
+                              selectedLabelTextStyle: const TextStyle(
+                                color: AppColors.brand,
+                                fontWeight: FontWeight.w700,
+                              ),
+                              unselectedIconTheme: const IconThemeData(
+                                color: AppColors.text2,
+                              ),
+                              unselectedLabelTextStyle: const TextStyle(
+                                color: AppColors.text2,
+                              ),
+                              destinations: [
+                                railDestination(
+                                  icon: Icons.home_outlined,
+                                  selectedIcon: Icons.home,
+                                  label: 'Home',
+                                ),
+                                railDestination(
+                                  icon: Icons.people_outline,
+                                  selectedIcon: Icons.people,
+                                  label: 'Community',
+                                ),
+                                railDestination(
+                                  icon: Icons.chat_bubble_outline,
+                                  selectedIcon: Icons.chat_bubble,
+                                  label: 'Chats',
+                                  badge: chatBadge,
+                                ),
+                                railDestination(
+                                  icon: Icons.bolt,
+                                  selectedIcon: Icons.bolt,
+                                  label: 'Safety',
+                                ),
+                                railDestination(
+                                  icon: Icons.person_outline,
+                                  selectedIcon: Icons.person,
+                                  label: 'Profile',
+                                ),
+                              ],
+                            ),
+                            const VerticalDivider(width: 1, thickness: 1),
+                            Expanded(child: buildContent(constrain: true)),
+                          ],
                         )
-                      : bottomNav,
+                      : buildContent(constrain: kIsWeb),
+                  bottomNavigationBar: (isWideWeb)
+                      ? null
+                      : (isIOS
+                          ? Theme(
+                              data: Theme.of(context).copyWith(
+                                splashFactory: NoSplash.splashFactory,
+                                highlightColor: Colors.transparent,
+                                splashColor: Colors.transparent,
+                              ),
+                              child: bottomNav,
+                            )
+                          : bottomNav),
                 );
               },
             );
@@ -1896,6 +2026,7 @@ class HomeScreen extends StatelessWidget {
       child: Column(
         children: [
           _buildHeader(),
+          if (kIsWeb) _buildLandingBanner(context),
           _buildSectionTitle('Quick Functions', top: 20),
           _buildQuickActions(),
           _buildSectionTitle('Featured Articles'),
@@ -1914,6 +2045,70 @@ class HomeScreen extends StatelessWidget {
                 );
               },
             ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildLandingBanner(BuildContext context) {
+    return Container(
+      margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+      width: double.infinity,
+      padding: const EdgeInsets.all(18),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: Colors.black12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Row(
+            children: [
+              Icon(Icons.shield_outlined, color: AppColors.brand),
+              SizedBox(width: 8),
+              Text(
+                'Safety Dashboard',
+                style: TextStyle(
+                  fontSize: 16,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.text,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          const Text(
+            'Need help right now? Open Emergency SOS for instant support and trusted contacts.',
+            style: TextStyle(color: AppColors.text2, height: 1.35),
+          ),
+          const SizedBox(height: 14),
+          Row(
+            children: [
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: onOpenSafety,
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.brand,
+                    foregroundColor: Colors.white,
+                    elevation: 0,
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                  ),
+                  icon: const Icon(Icons.warning_amber_rounded),
+                  label: const Text('Open Emergency SOS'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              IconButton.filledTonal(
+                onPressed: onOpenCommunity,
+                icon: const Icon(Icons.forum_outlined),
+                tooltip: 'Open community',
+              ),
+            ],
           ),
         ],
       ),
@@ -2028,52 +2223,112 @@ class HomeScreen extends StatelessWidget {
   Widget _buildQuickActions() {
     return Padding(
       padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Expanded(
-                child: _actionCard(
-                  'Emergency SOS',
-                  'Quick access',
-                  AppColors.brand,
-                  Colors.white,
-                  Icons.bolt,
-                  onTap: onOpenSafety,
-                ),
+      child: kIsWeb ? _buildQuickActionsWeb() : _buildQuickActionsDefault(),
+    );
+  }
+
+  Widget _buildQuickActionsWeb() {
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final wide = constraints.maxWidth >= 720;
+        return Wrap(
+          spacing: 12,
+          runSpacing: 12,
+          children: [
+            SizedBox(
+              width:
+                  wide
+                      ? (constraints.maxWidth - 24) / 3
+                      : (constraints.maxWidth - 12) / 2,
+              child: _actionCard(
+                'Emergency SOS',
+                'Quick access',
+                AppColors.brand,
+                Colors.white,
+                Icons.bolt,
+                onTap: onOpenSafety,
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _actionCard(
-                  'Community',
-                  'Join chat',
-                  AppColors.surface,
-                  AppColors.brand,
-                  Icons.people,
-                  onTap: onOpenCommunity,
-                ),
+            ),
+            SizedBox(
+              width:
+                  wide
+                      ? (constraints.maxWidth - 24) / 3
+                      : (constraints.maxWidth - 12) / 2,
+              child: _actionCard(
+                'Community',
+                'Join chat',
+                AppColors.surface,
+                AppColors.brand,
+                Icons.people,
+                onTap: onOpenCommunity,
               ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _actionCard(
-                  'Articles',
-                  'Read & learn',
-                  AppColors.surface,
-                  AppColors.brand,
-                  Icons.menu_book,
-                  onTap: onOpenArticles,
-                ),
+            ),
+            SizedBox(
+              width:
+                  wide
+                      ? (constraints.maxWidth - 24) / 3
+                      : (constraints.maxWidth - 12) / 2,
+              child: _actionCard(
+                'Articles',
+                'Read & learn',
+                AppColors.surface,
+                AppColors.brand,
+                Icons.menu_book,
+                onTap: onOpenArticles,
               ),
-              const SizedBox(width: 12),
-              const Expanded(child: SizedBox()),
-            ],
-          ),
-        ],
-      ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+  Widget _buildQuickActionsDefault() {
+    return Column(
+      children: [
+        Row(
+          children: [
+            Expanded(
+              child: _actionCard(
+                'Emergency SOS',
+                'Quick access',
+                AppColors.brand,
+                Colors.white,
+                Icons.bolt,
+                onTap: onOpenSafety,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _actionCard(
+                'Community',
+                'Join chat',
+                AppColors.surface,
+                AppColors.brand,
+                Icons.people,
+                onTap: onOpenCommunity,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          children: [
+            Expanded(
+              child: _actionCard(
+                'Articles',
+                'Read & learn',
+                AppColors.surface,
+                AppColors.brand,
+                Icons.menu_book,
+                onTap: onOpenArticles,
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Expanded(child: SizedBox()),
+          ],
+        ),
+      ],
     );
   }
 
