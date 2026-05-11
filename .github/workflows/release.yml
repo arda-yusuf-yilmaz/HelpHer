@@ -43,10 +43,13 @@ jobs:
         run: |
           $tag = "${{ github.ref_name }}"
           $version = $tag.TrimStart("v")
-          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          $sourceDir = Join-Path $env:GITHUB_WORKSPACE "build/windows/x64/runner/Release"
+          if (!(Test-Path $sourceDir)) {
+            throw "Windows release output not found at $sourceDir"
+          }
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" `
             "installer/windows/helpher.iss" `
-            "/DSourceDir=build/windows/x64/runner/Release" `
+            "/DSourceDir=$sourceDir" `
             "/DAppVersion=$version" `
             "/DOutputBaseFilename=HelpHer-$tag-Setup-Windows-x64"
 
@@ -54,7 +57,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: windows-installer
-          path: dist/*.exe
+          path: installer/windows/dist/*.exe
 
   build-macos:
     runs-on: macos-latest
