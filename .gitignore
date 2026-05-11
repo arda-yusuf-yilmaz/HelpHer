@@ -36,3 +36,6 @@ firestore-debug.log
 ui-debug.log
 lib/firebase_options.dart
 lib/firebase_options.dart
+android/app/google-services.json
+ios/Runner/GoogleService-Info.plist
+macos/Runner/GoogleService-Info.plist
