@@ -11,6 +11,7 @@ import 'package:flutter_sms/flutter_sms.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:file_selector/file_selector.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import 'firebase_options.dart';
@@ -22,6 +23,20 @@ const kWebAppCheckRecaptchaSiteKey = String.fromEnvironment(
 bool isComputerPlatform(TargetPlatform platform) {
   if (kIsWeb) return true;
   return platform == TargetPlatform.macOS ||
+      platform == TargetPlatform.windows ||
+      platform == TargetPlatform.linux;
+}
+
+bool supportsNativeSms(TargetPlatform platform) {
+  return platform == TargetPlatform.android || platform == TargetPlatform.iOS;
+}
+
+bool supportsProfilePhotoPicker(TargetPlatform platform) {
+  // With file selector, desktop can pick images too.
+  if (kIsWeb) return true;
+  return platform == TargetPlatform.android ||
+      platform == TargetPlatform.iOS ||
+      platform == TargetPlatform.macOS ||
       platform == TargetPlatform.windows ||
       platform == TargetPlatform.linux;
 }
@@ -471,8 +486,17 @@ class _AuthGateState extends State<AuthGate> {
 
   Future<void> _initGoogleSignIn() async {
     try {
+      if (kIsWeb) {
+        return;
+      }
+      if (defaultTargetPlatform == TargetPlatform.windows ||
+          defaultTargetPlatform == TargetPlatform.linux) {
+        return;
+      }
       final clientId = DefaultFirebaseOptions.currentPlatform.iosClientId;
-      await _googleSignIn.initialize(clientId: clientId);
+      if (clientId != null && clientId.isNotEmpty) {
+        await _googleSignIn.initialize(clientId: clientId);
+      }
     } on UnimplementedError {
       // Widget tests can run without a platform implementation for sign-in.
     } catch (_) {
@@ -497,6 +521,20 @@ class _AuthGateState extends State<AuthGate> {
         await _firebaseAuth.signInWithPopup(GoogleAuthProvider());
         _clearMessage();
         return;
+      }
+      if (defaultTargetPlatform == TargetPlatform.windows ||
+          defaultTargetPlatform == TargetPlatform.linux) {
+        try {
+          await _firebaseAuth.signInWithProvider(GoogleAuthProvider());
+          _clearMessage();
+          return;
+        } on UnimplementedError {
+          _showMessage(
+            'Google sign-in is not available on this desktop platform yet. '
+            'Please sign in with email/password.',
+          );
+          return;
+        }
       }
       if (!kIsWeb && defaultTargetPlatform == TargetPlatform.macOS) {
         try {
@@ -2529,6 +2567,20 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
   }
 
   Future<void> _sendAlertSmsToAll() async {
+    final platform = Theme.of(context).platform;
+    if (!supportsNativeSms(platform)) {
+      final text =
+          'SOS alert from HelpHer user ${widget.profile.name}. Please check on me immediately.';
+      await Clipboard.setData(ClipboardData(text: text));
+      if (mounted) {
+        _showMessage(
+          'SMS sending is not supported on this device. '
+          'We copied the alert text to your clipboard so you can paste it into your messaging app.',
+        );
+      }
+      _startSafetyCheckCountdown();
+      return;
+    }
     final recipients = _emergencyRecipientPhones;
     if (recipients.isEmpty) {
       _showMessage('No valid emergency contact numbers found.');
@@ -2567,6 +2619,17 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
     required String successMessage,
     required String failureMessage,
   }) async {
+    final platform = Theme.of(context).platform;
+    if (!supportsNativeSms(platform)) {
+      await Clipboard.setData(ClipboardData(text: text));
+      if (mounted) {
+        _showMessage(
+          'SMS sending is not supported on this device. '
+          'We copied the message to your clipboard so you can paste it into your messaging app.',
+        );
+      }
+      return;
+    }
     final recipients = _emergencyRecipientPhones;
     if (recipients.isEmpty) {
       _showMessage('No valid emergency contact numbers found.');
@@ -5716,18 +5779,46 @@ class _ProfileScreenState extends State<ProfileScreen> {
     if (_isUploadingPhoto) {
       return;
     }
+    final platform = Theme.of(context).platform;
+    if (!supportsProfilePhotoPicker(platform)) {
+      _showSnack(
+        'Profile photo picking is not supported on this platform yet.',
+      );
+      return;
+    }
     final signedInUid = FirebaseAuth.instance.currentUser?.uid;
     if (signedInUid == null || signedInUid != widget.currentUserUid) {
       _showSnack('Please sign in again before uploading a profile picture.');
       return;
     }
     try {
-      final picked = await _imagePicker.pickImage(
-        source: ImageSource.gallery,
-        imageQuality: 82,
-        maxWidth: 1200,
-      );
-      if (picked == null) {
+      Uint8List? bytes;
+      if (kIsWeb ||
+          platform == TargetPlatform.android ||
+          platform == TargetPlatform.iOS) {
+        final picked = await _imagePicker.pickImage(
+          source: ImageSource.gallery,
+          imageQuality: 82,
+          maxWidth: 1200,
+        );
+        if (picked == null) {
+          return;
+        }
+        bytes = await picked.readAsBytes();
+      } else {
+        const group = XTypeGroup(
+          label: 'Images',
+          extensions: <String>['jpg', 'jpeg', 'png', 'webp'],
+        );
+        final file = await openFile(acceptedTypeGroups: [group]);
+        if (file == null) {
+          return;
+        }
+        bytes = await file.readAsBytes();
+      }
+
+      if (bytes.isEmpty) {
+        _showSnack('Selected image was empty.');
         return;
       }
       setState(() => _isUploadingPhoto = true);
@@ -5736,7 +5827,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           .child('users')
           .child(widget.currentUserUid)
           .child('profile.jpg');
-      final bytes = await picked.readAsBytes();
       await ref.putData(bytes, SettableMetadata(contentType: 'image/jpeg'));
       final downloadUrl = _versionedPhotoUrl(
         await ref.getDownloadURL(),

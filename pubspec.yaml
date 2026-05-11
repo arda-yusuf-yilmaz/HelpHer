@@ -44,6 +44,7 @@ dependencies:
   flutter_sms: ^3.0.1
   firebase_storage: ^13.3.0
   image_picker: ^1.2.2
+  file_selector: ^1.0.3
 
 dev_dependencies:
   flutter_test:
