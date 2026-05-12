@@ -522,35 +522,32 @@ class _AuthGateState extends State<AuthGate> {
         _clearMessage();
         return;
       }
-      if (defaultTargetPlatform == TargetPlatform.windows ||
-          defaultTargetPlatform == TargetPlatform.linux) {
+      
+      // For macOS and Windows, use signInWithProvider which opens a browser
+      if (defaultTargetPlatform == TargetPlatform.macOS ||
+          defaultTargetPlatform == TargetPlatform.windows) {
         try {
           await _firebaseAuth.signInWithProvider(GoogleAuthProvider());
           _clearMessage();
           return;
-        } on UnimplementedError {
+        } catch (e) {
           _showMessage(
-            'Google sign-in is not available on this desktop platform yet. '
-            'Please sign in with email/password.',
+            'Browser sign-in failed. Please try email/password instead.\n\n'
+            'Error: ${e.toString()}',
           );
           return;
         }
       }
-      if (!kIsWeb && defaultTargetPlatform == TargetPlatform.macOS) {
-        try {
-          await _firebaseAuth.signInWithProvider(GoogleAuthProvider());
-          _clearMessage();
-          return;
-        } catch (error) {
-          final errorText = error.toString();
-          if (!errorText.contains('returned null value')) {
-            rethrow;
-          }
-          // macOS provider flow can return null from host platform; use token fallback.
-        }
-      }
+      
+      // For Android/iOS, use the native Google Sign-In SDK
       final account = await _googleSignIn.authenticate();
-      final googleAuth = account.authentication;
+      if (account == null) {
+        // User cancelled
+        setState(() => _isSigningIn = false);
+        return;
+      }
+      
+      final googleAuth = await account.authentication;
       final idToken = googleAuth.idToken;
       if (idToken == null) {
         throw FirebaseAuthException(
@@ -562,22 +559,12 @@ class _AuthGateState extends State<AuthGate> {
       final credential = GoogleAuthProvider.credential(idToken: idToken);
       await _firebaseAuth.signInWithCredential(credential);
       _clearMessage();
-    } on GoogleSignInException catch (error) {
-      final description = error.description?.trim();
-      final details = error.details?.toString().trim();
-      final detailParts = <String>[
-        if (description != null && description.isNotEmpty) description,
-        if (details != null && details.isNotEmpty) details,
-      ];
-      final detailText = detailParts.isEmpty
-          ? ''
-          : '\n${detailParts.join('\n')}';
-      _showMessage('Google sign-in failed (${error.code.name}).$detailText');
     } on FirebaseAuthException catch (error) {
       _showMessage(error.message ?? 'Google sign-in failed.');
     } catch (error) {
       _showMessage(
-        'Google sign-in failed (${error.runtimeType}). Confirm Google Sign-In is enabled in Firebase and this platform has a valid GoogleService-Info.plist configuration.',
+        'Google sign-in failed (${error.runtimeType}). '
+        'Try email/password instead.',
       );
     } finally {
       if (mounted) {
@@ -585,7 +572,7 @@ class _AuthGateState extends State<AuthGate> {
       }
     }
   }
-
+  
   Future<void> _submitEmailAuth() async {
     if (!widget.firebaseState.isReady) {
       return;
