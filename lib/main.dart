@@ -1430,8 +1430,6 @@ class _ChooseUsernameScreenState extends State<ChooseUsernameScreen> {
   Future<void> _save() async {
     final raw = _controller.text.trim();
     final key = normalizeHelpherUsernameKey(raw);
-    final currentUser = FirebaseAuth.instance.currentUser;
-    final email = currentUser?.email?.trim().toLowerCase();
     if (key == null) {
       setState(
         () => _errorMessage =
@@ -3624,7 +3622,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
         if (file == null) return;
         bytes = await file.readAsBytes();
       }
-      if (bytes == null || bytes.isEmpty) return;
+      if (bytes.isEmpty) return;
       final ref = _storage
           .ref()
           .child('chatRooms')
