@@ -708,23 +708,6 @@ class _AuthGateState extends State<AuthGate> {
   void initState() {
     super.initState();
     _initGoogleSignIn();
-    if (kIsWeb) _handleEmailActionLink();
-  }
-
-  Future<void> _handleEmailActionLink() async {
-    final uri = Uri.base;
-    final mode = uri.queryParameters['mode'];
-    final oobCode = uri.queryParameters['oobCode'];
-    if (mode == null || oobCode == null) return;
-
-    if (mode == 'verifyEmail') {
-      try {
-        await _firebaseAuth.applyActionCode(oobCode);
-        if (mounted) _showMessage('Email verified! Sign in to continue.');
-      } catch (_) {
-        if (mounted) _showMessage('Verification link is invalid or has expired.');
-      }
-    }
   }
 
   Future<void> _initGoogleSignIn() async {
