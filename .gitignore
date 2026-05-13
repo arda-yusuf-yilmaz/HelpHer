@@ -1,3 +1,6 @@
+# Firebase CLI local cache
+.firebase/
+
 # See https://www.dartlang.org/guides/libraries/private-files
 
 # Files and directories created by pub
