@@ -717,15 +717,13 @@ class _AuthGateState extends State<AuthGate> {
     final oobCode = uri.queryParameters['oobCode'];
     if (mode == null || oobCode == null) return;
 
-    try {
-      if (mode == 'verifyEmail') {
+    if (mode == 'verifyEmail') {
+      try {
         await _firebaseAuth.applyActionCode(oobCode);
-        await _firebaseAuth.currentUser?.reload();
-      } else if (mode == 'resetPassword') {
-        // Password reset is handled separately; nothing to do here.
+        if (mounted) _showMessage('Email verified! Sign in to continue.');
+      } catch (_) {
+        if (mounted) _showMessage('Verification link is invalid or has expired.');
       }
-    } catch (_) {
-      // Invalid/expired code — user will see the normal auth screen.
     }
   }
 
@@ -846,6 +844,7 @@ Future<void> _signInWithGoogle() async {
           email: email,
           password: password,
         );
+        await _firebaseAuth.currentUser?.reload();
         final verified = _firebaseAuth.currentUser?.emailVerified ?? false;
         if (!verified) {
           await _firebaseAuth.currentUser?.sendEmailVerification();
