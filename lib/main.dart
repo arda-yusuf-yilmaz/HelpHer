@@ -821,11 +821,6 @@ Future<void> _signInWithGoogle() async {
           password: password,
         );
         await cred.user?.sendEmailVerification();
-        await _firebaseAuth.signOut();
-        _showMessage(
-          'Account created! Check your inbox and verify your email before signing in.',
-        );
-        if (mounted) setState(() => _authMode = AuthMode.signIn);
         return;
       } else {
         await _firebaseAuth.signInWithEmailAndPassword(
