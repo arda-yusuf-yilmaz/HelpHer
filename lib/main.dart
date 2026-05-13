@@ -13,6 +13,9 @@ import 'package:google_sign_in/google_sign_in.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:file_selector/file_selector.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:cryptography/cryptography.dart';
+import 'dart:convert';
 
 import 'firebase_options.dart';
 
@@ -180,6 +183,229 @@ class UserProfileData {
     this.username,
     required this.emergencyContacts,
   });
+}
+
+enum _E2eeStatus { ready, newKeypair, backupAvailable }
+
+/// Manages X25519 keypairs and AES-256-GCM encryption for direct chat E2EE.
+class _E2eeManager {
+  static const _storage = FlutterSecureStorage();
+  static final _x25519 = X25519();
+  static final _aesGcm = AesGcm.with256bits();
+
+  static String _privKey(String uid) => 'e2ee_priv_$uid';
+  static String _pubKey(String uid) => 'e2ee_pub_$uid';
+
+  /// Ensures a keypair exists locally and publishes the public key to Firestore.
+  /// Returns [_E2eeStatus.ready] if the keypair already existed,
+  /// [_E2eeStatus.backupAvailable] if no local key but a Firestore backup
+  /// exists (new device — caller should prompt for passphrase recovery), or
+  /// [_E2eeStatus.newKeypair] if a brand-new keypair was generated (caller
+  /// should prompt to set up a backup passphrase).
+  static Future<_E2eeStatus> ensureKeypair(
+    String uid,
+    FirebaseFirestore firestore,
+  ) async {
+    try {
+      final storedPriv = await _storage.read(key: _privKey(uid));
+      final storedPub = await _storage.read(key: _pubKey(uid));
+      if (storedPriv != null && storedPub != null) {
+        // Already have a local keypair — just make sure public key is published.
+        await firestore.collection('users').doc(uid).set(
+          {'e2eePublicKey': base64.encode(base64.decode(storedPub))},
+          SetOptions(merge: true),
+        );
+        return _E2eeStatus.ready;
+      }
+      // No local keypair. Check whether the user has a Firestore backup.
+      final backupDoc = await firestore
+          .collection('users')
+          .doc(uid)
+          .collection('privateData')
+          .doc('keyBackup')
+          .get();
+      if (backupDoc.exists) {
+        return _E2eeStatus.backupAvailable;
+      }
+      // Nothing anywhere — generate a fresh keypair.
+      final keyPair = await _x25519.newKeyPair();
+      final privBytes = await keyPair.extractPrivateKeyBytes();
+      final pubBytes = (await keyPair.extractPublicKey()).bytes;
+      await _storage.write(key: _privKey(uid), value: base64.encode(privBytes));
+      await _storage.write(key: _pubKey(uid), value: base64.encode(pubBytes));
+      await firestore.collection('users').doc(uid).set(
+        {'e2eePublicKey': base64.encode(pubBytes)},
+        SetOptions(merge: true),
+      );
+      return _E2eeStatus.newKeypair;
+    } catch (_) {
+      return _E2eeStatus.ready; // Non-fatal fallback.
+    }
+  }
+
+  /// Encrypts the local private key with a PBKDF2-derived wrapping key and
+  /// stores the result in Firestore under users/{uid}/privateData/keyBackup.
+  static Future<void> backupPrivateKey(
+    String uid,
+    String passphrase,
+    FirebaseFirestore firestore,
+  ) async {
+    final privB64 = await _storage.read(key: _privKey(uid));
+    if (privB64 == null) return;
+    final privBytes = base64.decode(privB64);
+
+    final salt = _aesGcm.newNonce(); // 16 random bytes as salt
+    final pbkdf2 = Pbkdf2(
+      macAlgorithm: Hmac.sha256(),
+      iterations: 100000,
+      bits: 256,
+    );
+    final wrappingKey = await pbkdf2.deriveKey(
+      secretKey: SecretKey(utf8.encode(passphrase)),
+      nonce: salt,
+    );
+    final wrappingKeyBytes = await wrappingKey.extractBytes();
+    final wrapKey = await _aesGcm.newSecretKeyFromBytes(wrappingKeyBytes);
+    final nonce = _aesGcm.newNonce();
+    final box = await _aesGcm.encrypt(privBytes, secretKey: wrapKey, nonce: nonce);
+
+    await firestore
+        .collection('users')
+        .doc(uid)
+        .collection('privateData')
+        .doc('keyBackup')
+        .set({
+      'enc': base64.encode([...box.cipherText, ...box.mac.bytes]),
+      'salt': base64.encode(salt),
+      'iv': base64.encode(nonce),
+    });
+  }
+
+  /// Fetches the Firestore backup, derives the wrapping key from [passphrase],
+  /// decrypts the private key, and saves it to local secure storage.
+  /// Returns true on success, false if the passphrase is wrong or no backup exists.
+  static Future<bool> restoreFromBackup(
+    String uid,
+    String passphrase,
+    FirebaseFirestore firestore,
+  ) async {
+    try {
+      final doc = await firestore
+          .collection('users')
+          .doc(uid)
+          .collection('privateData')
+          .doc('keyBackup')
+          .get();
+      if (!doc.exists) return false;
+      final data = doc.data()!;
+      final salt = base64.decode(data['salt'] as String);
+      final iv = base64.decode(data['iv'] as String);
+      final raw = base64.decode(data['enc'] as String);
+      final mac = raw.sublist(raw.length - 16);
+      final ct = raw.sublist(0, raw.length - 16);
+
+      final pbkdf2 = Pbkdf2(
+        macAlgorithm: Hmac.sha256(),
+        iterations: 100000,
+        bits: 256,
+      );
+      final wrappingKey = await pbkdf2.deriveKey(
+        secretKey: SecretKey(utf8.encode(passphrase)),
+        nonce: salt,
+      );
+      final wrapKey = await _aesGcm.newSecretKeyFromBytes(
+        await wrappingKey.extractBytes(),
+      );
+      final privBytes = await _aesGcm.decrypt(
+        SecretBox(ct, nonce: iv, mac: Mac(mac)),
+        secretKey: wrapKey,
+      );
+
+      // Reconstruct the X25519 public key from the private key.
+      final keyPair = await _x25519.newKeyPairFromSeed(privBytes);
+      final pubBytes = (await keyPair.extractPublicKey()).bytes;
+
+      await _storage.write(key: _privKey(uid), value: base64.encode(privBytes));
+      await _storage.write(key: _pubKey(uid), value: base64.encode(pubBytes));
+      await firestore.collection('users').doc(uid).set(
+        {'e2eePublicKey': base64.encode(pubBytes)},
+        SetOptions(merge: true),
+      );
+      return true;
+    } catch (_) {
+      return false; // Wrong passphrase or decryption failure.
+    }
+  }
+
+  /// Derives the shared secret bytes for a direct chat with [theirPublicKeyB64].
+  /// Returns null if our keypair is missing.
+  static Future<Uint8List?> deriveSharedSecret(
+    String myUid,
+    String theirPublicKeyB64,
+  ) async {
+    try {
+      final privB64 = await _storage.read(key: _privKey(myUid));
+      final pubB64 = await _storage.read(key: _pubKey(myUid));
+      if (privB64 == null || pubB64 == null) return null;
+      final keyPair = SimpleKeyPairData(
+        base64.decode(privB64),
+        publicKey: SimplePublicKey(
+          base64.decode(pubB64),
+          type: KeyPairType.x25519,
+        ),
+        type: KeyPairType.x25519,
+      );
+      final sharedKey = await _x25519.sharedSecretKey(
+        keyPair: keyPair,
+        remotePublicKey: SimplePublicKey(
+          base64.decode(theirPublicKeyB64),
+          type: KeyPairType.x25519,
+        ),
+      );
+      return Uint8List.fromList(await sharedKey.extractBytes());
+    } catch (_) {
+      return null;
+    }
+  }
+
+  /// Encrypts [plaintext]. Returns base64-encoded `iv` and `ct` (ciphertext+MAC).
+  static Future<({String iv, String ct})> encrypt(
+    String plaintext,
+    Uint8List sharedSecret,
+  ) async {
+    final secretKey = await _aesGcm.newSecretKeyFromBytes(sharedSecret);
+    final nonce = _aesGcm.newNonce();
+    final box = await _aesGcm.encrypt(
+      utf8.encode(plaintext),
+      secretKey: secretKey,
+      nonce: nonce,
+    );
+    return (
+      iv: base64.encode(box.nonce),
+      ct: base64.encode([...box.cipherText, ...box.mac.bytes]),
+    );
+  }
+
+  /// Decrypts a message. Returns null if decryption fails.
+  static Future<String?> decrypt(
+    String ivB64,
+    String ctB64,
+    Uint8List sharedSecret,
+  ) async {
+    try {
+      final secretKey = await _aesGcm.newSecretKeyFromBytes(sharedSecret);
+      final raw = base64.decode(ctB64);
+      final mac = raw.sublist(raw.length - 16);
+      final ct = raw.sublist(0, raw.length - 16);
+      final plain = await _aesGcm.decrypt(
+        SecretBox(ct, nonce: base64.decode(ivB64), mac: Mac(mac)),
+        secretKey: secretKey,
+      );
+      return utf8.decode(plain);
+    } catch (_) {
+      return null;
+    }
+  }
 }
 
 class HelpHerArticle {
@@ -590,15 +816,30 @@ Future<void> _signInWithGoogle() async {
       }
 
       if (_authMode == AuthMode.signUp) {
-        await _firebaseAuth.createUserWithEmailAndPassword(
+        final cred = await _firebaseAuth.createUserWithEmailAndPassword(
           email: email,
           password: password,
         );
+        await cred.user?.sendEmailVerification();
+        await _firebaseAuth.signOut();
+        _showMessage(
+          'Account created! Check your inbox and verify your email before signing in.',
+        );
+        if (mounted) setState(() => _authMode = AuthMode.signIn);
+        return;
       } else {
         await _firebaseAuth.signInWithEmailAndPassword(
           email: email,
           password: password,
         );
+        final verified = _firebaseAuth.currentUser?.emailVerified ?? false;
+        if (!verified) {
+          await _firebaseAuth.signOut();
+          _showMessage(
+            'Please verify your email before signing in. Check your inbox for the link.',
+          );
+          return;
+        }
       }
       _clearMessage();
     } on FirebaseAuthException catch (error) {
@@ -615,6 +856,11 @@ Future<void> _signInWithGoogle() async {
     if (!kIsWeb) {
       await _googleSignIn.signOut();
     }
+  }
+
+  Future<void> _refreshUser() async {
+    await _firebaseAuth.currentUser?.reload();
+    if (mounted) setState(() {});
   }
 
   Future<void> _syncUserProfileDoc(User user) async {
@@ -724,6 +970,21 @@ Future<void> _signInWithGoogle() async {
       builder: (context, snapshot) {
         final user = snapshot.data;
         if (user != null) {
+          // Gate email/password users until they verify their address.
+          // Google users are always verified, so this branch never triggers for them.
+          final liveUser = _firebaseAuth.currentUser;
+          final isEmailProvider =
+              liveUser?.providerData.any((p) => p.providerId == 'password') ??
+              false;
+          if (isEmailProvider && !(liveUser?.emailVerified ?? false)) {
+            return VerifyEmailScreen(
+              email: liveUser?.email ?? '',
+              onResend: () async =>
+                  liveUser?.sendEmailVerification(),
+              onContinue: _refreshUser,
+              onSignOut: _signOut,
+            );
+          }
           if (_lastSyncedUserUid != user.uid) {
             _lastSyncedUserUid = user.uid;
             _syncUserProfileDoc(user);
@@ -894,6 +1155,111 @@ Future<void> _signInWithGoogle() async {
                       ),
                     ),
                   ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class VerifyEmailScreen extends StatefulWidget {
+  final String email;
+  final Future<void> Function() onResend;
+  final Future<void> Function() onContinue;
+  final Future<void> Function() onSignOut;
+
+  const VerifyEmailScreen({
+    super.key,
+    required this.email,
+    required this.onResend,
+    required this.onContinue,
+    required this.onSignOut,
+  });
+
+  @override
+  State<VerifyEmailScreen> createState() => _VerifyEmailScreenState();
+}
+
+class _VerifyEmailScreenState extends State<VerifyEmailScreen> {
+  bool _resent = false;
+  bool _busy = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(24),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.mark_email_unread_outlined,
+                      size: 64, color: AppColors.brand),
+                  const SizedBox(height: 16),
+                  const Text(
+                    'Verify your email',
+                    style: TextStyle(
+                        fontSize: 24, fontWeight: FontWeight.w800),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'We sent a verification link to\n${widget.email}\n\nOpen it, then come back and tap Continue.',
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(color: AppColors.text2, height: 1.5),
+                  ),
+                  const SizedBox(height: 28),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: _busy
+                          ? null
+                          : () async {
+                              setState(() => _busy = true);
+                              await widget.onContinue();
+                              if (mounted) setState(() => _busy = false);
+                            },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppColors.brand,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                      ),
+                      child: _busy
+                          ? const SizedBox(
+                              width: 20,
+                              height: 20,
+                              child: CircularProgressIndicator(
+                                  strokeWidth: 2, color: Colors.white),
+                            )
+                          : const Text('I\'ve verified — Continue'),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextButton(
+                    onPressed: _resent
+                        ? null
+                        : () async {
+                            await widget.onResend();
+                            if (mounted) setState(() => _resent = true);
+                          },
+                    child: Text(
+                      _resent ? 'Email sent!' : 'Resend verification email',
+                      style: TextStyle(
+                          color: _resent ? AppColors.text2 : AppColors.brand),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: widget.onSignOut,
+                    child: const Text('Sign out',
+                        style: TextStyle(color: AppColors.text2)),
+                  ),
                 ],
               ),
             ),
@@ -1312,6 +1678,7 @@ class _MainShellState extends State<MainShell>
         .snapshots();
     _loadArticles();
     _loadProfile();
+    _initE2eeSetup();
     if (kIsWeb && kWebAppCheckRecaptchaSiteKey.isEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) {
@@ -1381,6 +1748,39 @@ class _MainShellState extends State<MainShell>
     );
   }
 
+  static const _secureStorage = FlutterSecureStorage();
+
+  String get _contactsStorageKey =>
+      'emergency_contacts_${widget.currentUserUid}';
+
+  Future<List<EmergencyContact>> _loadContactsLocally() async {
+    try {
+      final raw = await _secureStorage.read(key: _contactsStorageKey);
+      if (raw == null) return [];
+      final list = jsonDecode(raw) as List<dynamic>;
+      return list.map((item) {
+        final m = item as Map<String, dynamic>;
+        return EmergencyContact(
+          name: (m['name'] as String?) ?? '',
+          phone: (m['phone'] as String?) ?? '',
+        );
+      }).where((c) => c.name.isNotEmpty || c.phone.isNotEmpty).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<void> _saveContacts(List<EmergencyContact> contacts) async {
+    try {
+      final encoded = jsonEncode(
+        contacts.map((c) => {'name': c.name, 'phone': c.phone}).toList(),
+      );
+      await _secureStorage.write(key: _contactsStorageKey, value: encoded);
+    } catch (_) {
+      // Silently ignore — local state already updated.
+    }
+  }
+
   Future<void> _loadProfile() async {
     try {
       final doc = await _firestore
@@ -1389,19 +1789,30 @@ class _MainShellState extends State<MainShell>
           .get();
       final data = doc.data();
       if (!mounted || data == null) return;
-      final rawContacts = data['emergencyContacts'];
-      final contacts = <EmergencyContact>[];
-      if (rawContacts is List) {
-        for (final item in rawContacts) {
-          if (item is Map) {
-            final name = (item['name'] as String?) ?? '';
-            final phone = (item['phone'] as String?) ?? '';
-            if (name.isNotEmpty || phone.isNotEmpty) {
-              contacts.add(EmergencyContact(name: name, phone: phone));
+
+      // Migrate contacts from Firestore to local secure storage if present.
+      var contacts = await _loadContactsLocally();
+      if (contacts.isEmpty && data.containsKey('emergencyContacts')) {
+        final rawContacts = data['emergencyContacts'];
+        if (rawContacts is List) {
+          for (final item in rawContacts) {
+            if (item is Map) {
+              final name = (item['name'] as String?) ?? '';
+              final phone = (item['phone'] as String?) ?? '';
+              if (name.isNotEmpty || phone.isNotEmpty) {
+                contacts.add(EmergencyContact(name: name, phone: phone));
+              }
             }
           }
         }
+        // Save to local storage and remove from Firestore.
+        await _saveContacts(contacts);
+        await _firestore
+            .collection('users')
+            .doc(widget.currentUserUid)
+            .update({'emergencyContacts': FieldValue.delete()});
       }
+
       final usernameRaw = (data['username'] as String?)?.trim();
       final usernameLowerRaw = (data['usernameLower'] as String?)?.trim();
       final usernameLoaded = usernameRaw != null && usernameRaw.isNotEmpty
@@ -1409,6 +1820,7 @@ class _MainShellState extends State<MainShell>
           : (usernameLowerRaw != null && usernameLowerRaw.isNotEmpty
                 ? usernameLowerRaw
                 : null);
+      if (!mounted) return;
       setState(() {
         _profile = UserProfileData(
           name: (data['displayName'] as String?)?.trim().isNotEmpty == true
@@ -1423,18 +1835,6 @@ class _MainShellState extends State<MainShell>
       });
     } catch (_) {
       // Keep in-memory defaults if load fails.
-    }
-  }
-
-  Future<void> _saveContacts(List<EmergencyContact> contacts) async {
-    try {
-      await _firestore.collection('users').doc(widget.currentUserUid).set({
-        'emergencyContacts': contacts
-            .map((c) => {'name': c.name, 'phone': c.phone})
-            .toList(),
-      }, SetOptions(merge: true));
-    } catch (_) {
-      // Silently ignore — local state already updated.
     }
   }
 
@@ -1495,6 +1895,209 @@ class _MainShellState extends State<MainShell>
       );
     });
     _saveContacts(updated);
+  }
+
+  Future<void> _initE2eeSetup() async {
+    final status = await _E2eeManager.ensureKeypair(
+      widget.currentUserUid,
+      _firestore,
+    );
+    if (!mounted) return;
+    if (status == _E2eeStatus.newKeypair) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _showBackupSetupDialog();
+      });
+    } else if (status == _E2eeStatus.backupAvailable) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _showKeyRecoveryDialog();
+      });
+    }
+  }
+
+  Future<void> _showBackupSetupDialog() async {
+    final passphraseController = TextEditingController();
+    final confirmController = TextEditingController();
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        String? error;
+        bool saving = false;
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            return AlertDialog(
+              title: const Text('Protect your messages'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Set a recovery passphrase to restore your encrypted messages if you reinstall or switch devices. '
+                      'If you skip this, messages on new devices will start fresh.',
+                      style: TextStyle(color: AppColors.text2, height: 1.5),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: passphraseController,
+                      obscureText: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Recovery passphrase',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    const SizedBox(height: 10),
+                    TextField(
+                      controller: confirmController,
+                      obscureText: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Confirm passphrase',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    if (error != null) ...[
+                      const SizedBox(height: 8),
+                      Text(error!,
+                          style: const TextStyle(color: Colors.red, fontSize: 13)),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  child: const Text('Skip for now'),
+                ),
+                ElevatedButton(
+                  onPressed: saving
+                      ? null
+                      : () async {
+                          final p = passphraseController.text;
+                          final c = confirmController.text;
+                          if (p.length < 8) {
+                            setDialogState(() =>
+                                error = 'Passphrase must be at least 8 characters.');
+                            return;
+                          }
+                          if (p != c) {
+                            setDialogState(() => error = 'Passphrases do not match.');
+                            return;
+                          }
+                          setDialogState(() => saving = true);
+                          await _E2eeManager.backupPrivateKey(
+                            widget.currentUserUid,
+                            p,
+                            _firestore,
+                          );
+                          if (ctx.mounted) Navigator.of(ctx).pop();
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.brand,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: saving
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Text('Save backup'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    passphraseController.dispose();
+    confirmController.dispose();
+  }
+
+  Future<void> _showKeyRecoveryDialog() async {
+    final passphraseController = TextEditingController();
+    await showDialog<void>(
+      context: context,
+      barrierDismissible: false,
+      builder: (ctx) {
+        String? error;
+        bool restoring = false;
+        return StatefulBuilder(
+          builder: (ctx, setDialogState) {
+            return AlertDialog(
+              title: const Text('Restore your messages'),
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'A message backup was found for this account. '
+                      'Enter your recovery passphrase to restore your encrypted messages on this device.',
+                      style: TextStyle(color: AppColors.text2, height: 1.5),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: passphraseController,
+                      obscureText: true,
+                      autofocus: true,
+                      decoration: const InputDecoration(
+                        labelText: 'Recovery passphrase',
+                        border: OutlineInputBorder(),
+                      ),
+                    ),
+                    if (error != null) ...[
+                      const SizedBox(height: 8),
+                      Text(error!,
+                          style: const TextStyle(color: Colors.red, fontSize: 13)),
+                    ],
+                  ],
+                ),
+              ),
+              actions: [
+                TextButton(
+                  onPressed: () => Navigator.of(ctx).pop(),
+                  child: const Text('Skip — start fresh'),
+                ),
+                ElevatedButton(
+                  onPressed: restoring
+                      ? null
+                      : () async {
+                          setDialogState(() => restoring = true);
+                          final ok = await _E2eeManager.restoreFromBackup(
+                            widget.currentUserUid,
+                            passphraseController.text,
+                            _firestore,
+                          );
+                          if (!ok) {
+                            setDialogState(() {
+                              restoring = false;
+                              error = 'Wrong passphrase. Please try again.';
+                            });
+                            return;
+                          }
+                          if (ctx.mounted) Navigator.of(ctx).pop();
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppColors.brand,
+                    foregroundColor: Colors.white,
+                  ),
+                  child: restoring
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(
+                              strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Text('Restore'),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+    passphraseController.dispose();
   }
 
   Future<void> _loadArticles() async {
@@ -3132,7 +3735,12 @@ class _ChatsScreenState extends State<ChatsScreen> {
                   if (context.mounted) {
                     Navigator.of(context).pop();
                   }
-                  _openRoom(roomId, targetName);
+                  _openRoom(
+                    roomId,
+                    targetName,
+                    type: 'direct',
+                    members: [widget.currentUserUid, targetUid],
+                  );
                 } on FirebaseException catch (e) {
                   if (context.mounted) {
                     ScaffoldMessenger.of(context).showSnackBar(
@@ -3253,7 +3861,12 @@ class _ChatsScreenState extends State<ChatsScreen> {
                         return;
                       }
                       Navigator.of(context).pop();
-                      _openRoom(roomRef.id, name);
+                      _openRoom(
+                        roomRef.id,
+                        name,
+                        type: 'group',
+                        members: members,
+                      );
                     } on FirebaseException catch (e) {
                       _showChatSnack(
                         e.message ?? 'Could not create group (${e.code}).',
@@ -3300,7 +3913,12 @@ class _ChatsScreenState extends State<ChatsScreen> {
     }
   }
 
-  void _openRoom(String roomId, String roomName) {
+  void _openRoom(
+    String roomId,
+    String roomName, {
+    String type = 'group',
+    List<String> members = const [],
+  }) {
     Navigator.of(context).push(
       buildSlideRoute<void>(
         page: ChatRoomScreen(
@@ -3308,6 +3926,8 @@ class _ChatsScreenState extends State<ChatsScreen> {
           roomName: roomName,
           currentUserUid: widget.currentUserUid,
           currentUserName: widget.currentUserName,
+          roomType: type,
+          roomMembers: members,
         ),
       ),
     );
@@ -3429,7 +4049,12 @@ class _ChatsScreenState extends State<ChatsScreen> {
                                 ),
                               )
                             : null,
-                        onTap: () => _openRoom(roomDoc.id, roomName),
+                        onTap: () => _openRoom(
+                          roomDoc.id,
+                          roomName,
+                          type: type,
+                          members: roomMembers.whereType<String>().toList(),
+                        ),
                       ),
                     );
                     if (type == 'direct') {
@@ -3547,6 +4172,8 @@ class ChatRoomScreen extends StatefulWidget {
   final String roomName;
   final String currentUserUid;
   final String currentUserName;
+  final String roomType;
+  final List<String> roomMembers;
 
   const ChatRoomScreen({
     super.key,
@@ -3554,6 +4181,8 @@ class ChatRoomScreen extends StatefulWidget {
     required this.roomName,
     required this.currentUserUid,
     required this.currentUserName,
+    this.roomType = 'group',
+    this.roomMembers = const [],
   });
 
   @override
@@ -3566,6 +4195,10 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   Timer? _typingDebounce;
   bool _isTyping = false;
 
+  // E2EE state — only used for direct (1:1) chats.
+  Uint8List? _sharedSecret;
+  bool _e2eeReady = false;
+
   DocumentReference<Map<String, dynamic>> get _roomRef =>
       _firestore.collection('chatRooms').doc(widget.roomId);
 
@@ -3577,6 +4210,32 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
     super.initState();
     _messageController = TextEditingController();
     _markAsRead();
+    if (widget.roomType == 'direct') _initE2ee();
+  }
+
+  Future<void> _initE2ee() async {
+    final otherUid = widget.roomMembers.firstWhere(
+      (uid) => uid != widget.currentUserUid,
+      orElse: () => '',
+    );
+    if (otherUid.isEmpty) return;
+    try {
+      final snap = await _firestore.collection('users').doc(otherUid).get();
+      final theirKey = (snap.data()?['e2eePublicKey'] as String?);
+      if (theirKey == null) return;
+      final secret = await _E2eeManager.deriveSharedSecret(
+        widget.currentUserUid,
+        theirKey,
+      );
+      if (secret != null && mounted) {
+        setState(() {
+          _sharedSecret = secret;
+          _e2eeReady = true;
+        });
+      }
+    } catch (_) {
+      // Fall back to unencrypted gracefully.
+    }
   }
 
   @override
@@ -3599,25 +4258,44 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
 
   Future<void> _sendMessage() async {
     final text = _messageController.text.trim();
-    if (text.isEmpty) {
-      return;
-    }
+    if (text.isEmpty) return;
     _messageController.clear();
+
     final batch = _firestore.batch();
     final messageRef = _messagesRef.doc();
-    batch.set(messageRef, {
-      'senderUid': widget.currentUserUid,
-      'senderName': widget.currentUserName,
-      'text': text,
-      'createdAt': FieldValue.serverTimestamp(),
-    });
-    batch.update(_roomRef, {
-      'lastMessage': text,
-      'lastMessageAt': FieldValue.serverTimestamp(),
-      'lastMessageBy': widget.currentUserUid,
-      'updatedAt': FieldValue.serverTimestamp(),
-      'lastReadBy': {widget.currentUserUid: FieldValue.serverTimestamp()},
-    });
+
+    if (_e2eeReady && _sharedSecret != null) {
+      final enc = await _E2eeManager.encrypt(text, _sharedSecret!);
+      batch.set(messageRef, {
+        'senderUid': widget.currentUserUid,
+        'senderName': widget.currentUserName,
+        'enc': true,
+        'iv': enc.iv,
+        'ct': enc.ct,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      batch.update(_roomRef, {
+        'lastMessage': '🔒 Encrypted message',
+        'lastMessageAt': FieldValue.serverTimestamp(),
+        'lastMessageBy': widget.currentUserUid,
+        'updatedAt': FieldValue.serverTimestamp(),
+        'lastReadBy': {widget.currentUserUid: FieldValue.serverTimestamp()},
+      });
+    } else {
+      batch.set(messageRef, {
+        'senderUid': widget.currentUserUid,
+        'senderName': widget.currentUserName,
+        'text': text,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      batch.update(_roomRef, {
+        'lastMessage': text,
+        'lastMessageAt': FieldValue.serverTimestamp(),
+        'lastMessageBy': widget.currentUserUid,
+        'updatedAt': FieldValue.serverTimestamp(),
+        'lastReadBy': {widget.currentUserUid: FieldValue.serverTimestamp()},
+      });
+    }
     await batch.commit();
     await _setTyping(false);
   }
@@ -3740,7 +4418,19 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
         }
         return Scaffold(
           appBar: AppBar(
-            title: Text(widget.roomName),
+            title: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(widget.roomName),
+                if (_e2eeReady) ...[
+                  const SizedBox(width: 6),
+                  const Tooltip(
+                    message: 'End-to-end encrypted',
+                    child: Icon(Icons.lock, size: 16, color: Colors.white70),
+                  ),
+                ],
+              ],
+            ),
             actions: [
               if (roomType == 'group') ...[
                 IconButton(
@@ -3905,8 +4595,8 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                         final senderUid = (data['senderUid'] as String?) ?? '';
                         final senderName =
                             (data['senderName'] as String?) ?? 'User';
-                        final text = (data['text'] as String?) ?? '';
                         final isMe = senderUid == widget.currentUserUid;
+                        final isEnc = data['enc'] == true;
                         return Align(
                           alignment: isMe
                               ? Alignment.centerRight
@@ -3933,12 +4623,38 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                                       fontWeight: FontWeight.w600,
                                     ),
                                   ),
-                                Text(
-                                  text,
-                                  style: TextStyle(
-                                    color: isMe ? Colors.white : AppColors.text,
+                                if (isEnc && _e2eeReady && _sharedSecret != null)
+                                  FutureBuilder<String?>(
+                                    future: _E2eeManager.decrypt(
+                                      (data['iv'] as String?) ?? '',
+                                      (data['ct'] as String?) ?? '',
+                                      _sharedSecret!,
+                                    ),
+                                    builder: (context, snap) {
+                                      final display = snap.data ??
+                                          (snap.connectionState ==
+                                                  ConnectionState.done
+                                              ? '🔒 Unable to decrypt'
+                                              : '');
+                                      return Text(
+                                        display,
+                                        style: TextStyle(
+                                          color: isMe
+                                              ? Colors.white
+                                              : AppColors.text,
+                                        ),
+                                      );
+                                    },
+                                  )
+                                else
+                                  Text(
+                                    isEnc
+                                        ? '🔒 Encrypted message'
+                                        : (data['text'] as String?) ?? '',
+                                    style: TextStyle(
+                                      color: isMe ? Colors.white : AppColors.text,
+                                    ),
                                   ),
-                                ),
                               ],
                             ),
                           ),
