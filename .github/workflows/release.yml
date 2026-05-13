@@ -98,13 +98,31 @@ jobs:
       - name: Test
         run: flutter test
 
+      - name: Import signing certificate
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+        run: |
+          KEYCHAIN_PATH=$RUNNER_TEMP/app-signing.keychain-db
+          KEYCHAIN_PASSWORD=$(openssl rand -base64 32)
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          echo "$MACOS_CERTIFICATE" | base64 --decode > /tmp/certificate.p12
+          security import /tmp/certificate.p12 -k "$KEYCHAIN_PATH" \
+            -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+          security list-keychain -d user -s "$KEYCHAIN_PATH"
+          security set-key-partition-list -S apple-tool:,apple: -s \
+            -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          rm /tmp/certificate.p12
+
       - name: Build macOS release
         run: flutter build macos --release
         env:
-          FLUTTER_XCODE_CODE_SIGNING_ALLOWED: "NO"
-          FLUTTER_XCODE_CODE_SIGNING_REQUIRED: "NO"
-          FLUTTER_XCODE_CODE_SIGN_IDENTITY: "-"
-          FLUTTER_XCODE_PROVISIONING_PROFILE_SPECIFIER: ""
+          FLUTTER_XCODE_CODE_SIGN_IDENTITY: "Developer ID Application"
+          FLUTTER_XCODE_DEVELOPMENT_TEAM: ${{ secrets.APPLE_TEAM_ID }}
+          FLUTTER_XCODE_CODE_SIGNING_REQUIRED: "YES"
+          FLUTTER_XCODE_CODE_SIGNING_ALLOWED: "YES"
 
       - name: Package macOS build (dmg)
         run: |
@@ -122,6 +140,19 @@ jobs:
           ln -s /Applications "${STAGE}/Applications"
           hdiutil create -volname "HelpHer" -srcfolder "${STAGE}" -ov -format UDZO "dist/${DMG}"
           echo "Created dist/${DMG}"
+
+      - name: Notarize dmg
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          xcrun notarytool submit dist/*.dmg \
+            --apple-id "$APPLE_ID" \
+            --password "$APPLE_APP_PASSWORD" \
+            --team-id "$APPLE_TEAM_ID" \
+            --wait
+          xcrun stapler staple dist/*.dmg
 
       - name: Upload macOS dmg
         uses: actions/upload-artifact@v4

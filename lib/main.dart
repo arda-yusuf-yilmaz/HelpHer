@@ -790,7 +790,7 @@ Future<void> _signInWithGoogle() async {
         rethrow;
       }
     } on FirebaseAuthException catch (error) {
-      _showMessage(error.message ?? 'Google sign-in failed.');
+      _showMessage(_friendlyAuthError(error.message));
     } catch (error) {
       _showMessage(
         'Google sign-in failed. Please use email/password instead.',
@@ -836,7 +836,7 @@ Future<void> _signInWithGoogle() async {
       }
       _clearMessage();
     } on FirebaseAuthException catch (error) {
-      _showMessage(error.message ?? 'Authentication failed.');
+      _showMessage(_friendlyAuthError(error.message));
     } finally {
       if (mounted) {
         setState(() => _isSigningIn = false);
@@ -917,6 +917,15 @@ Future<void> _signInWithGoogle() async {
         setState(() => _isConfirmingEligibility = false);
       }
     }
+  }
+
+  String _friendlyAuthError(String? message) {
+    if (message == null) return 'Authentication failed.';
+    final lower = message.toLowerCase();
+    if (lower.contains('keychain') || lower.contains('nserror') || lower.contains('nslocalizedfailure')) {
+      return 'Sign-in failed. Please try again or use a different method.';
+    }
+    return message;
   }
 
   void _showMessage(String message) {
