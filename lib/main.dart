@@ -2351,7 +2351,7 @@ class _MainShellState extends State<MainShell>
 
                 final screens = [
                   HomeScreen(
-                    userName: _profile.name,
+                    userName: _profile.username ?? _profile.name,
                     featuredArticles: _articles.take(2).toList(),
                     onOpenSafety: () => _switchTab(3, animated: true),
                     onOpenCommunity: () => _switchTab(1, animated: true),
@@ -2847,13 +2847,11 @@ class HomeScreen extends StatelessWidget {
 
   String _timeOfDayGreeting(DateTime now) {
     final hour = now.hour;
-    if (hour < 12) {
-      return 'Good morning';
-    }
-    if (hour < 18) {
-      return 'Good afternoon';
-    }
-    return 'Good evening';
+    if (hour < 5) return 'Good night';
+    if (hour < 12) return 'Good morning';
+    if (hour < 18) return 'Good afternoon';
+    if (hour < 21) return 'Good evening';
+    return 'Good night';
   }
 
   Widget _buildQuickActions(BuildContext context) {
