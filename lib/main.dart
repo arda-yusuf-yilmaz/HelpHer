@@ -1876,7 +1876,9 @@ class _MainShellState extends State<MainShell>
                     animation: _tabEntranceController,
                     child: PageView(
                       controller: _pageController,
-                      physics: const ClampingScrollPhysics(),
+                      physics: isComputer
+                          ? const NeverScrollableScrollPhysics()
+                          : const ClampingScrollPhysics(),
                       onPageChanged: (index) {
                         if (_currentIndex != index) {
                           setState(() => _currentIndex = index);
@@ -4251,7 +4253,17 @@ class _ArticlesScreenState extends State<ArticlesScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isComputer = isComputerPlatform(Theme.of(context).platform);
     return Scaffold(
+      appBar: isComputer
+          ? AppBar(
+              title: const Text('Articles'),
+              surfaceTintColor: Colors.transparent,
+              leading: BackButton(
+                onPressed: () => Navigator.of(context).pop(),
+              ),
+            )
+          : null,
       floatingActionButton: widget.canManageArticles
           ? FloatingActionButton.extended(
               onPressed: () => _openArticleSheet(),
@@ -4262,6 +4274,7 @@ class _ArticlesScreenState extends State<ArticlesScreen> {
             )
           : null,
       body: SafeArea(
+        top: !isComputer,
         child: Column(
           children: [
             Padding(
