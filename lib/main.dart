@@ -848,10 +848,7 @@ Future<void> _signInWithGoogle() async {
         );
         final verified = _firebaseAuth.currentUser?.emailVerified ?? false;
         if (!verified) {
-          await _firebaseAuth.signOut();
-          _showMessage(
-            'Please verify your email before signing in. Check your inbox for the link.',
-          );
+          await _firebaseAuth.currentUser?.sendEmailVerification();
           return;
         }
       }
