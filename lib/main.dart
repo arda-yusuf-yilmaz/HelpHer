@@ -489,7 +489,9 @@ class _AuthGateState extends State<AuthGate> {
       if (kIsWeb) {
         return;
       }
-      if (defaultTargetPlatform == TargetPlatform.windows ||
+      // Skip GoogleSignIn init on desktop — we'll use Firebase's browser flow
+      if (defaultTargetPlatform == TargetPlatform.macOS ||
+          defaultTargetPlatform == TargetPlatform.windows ||
           defaultTargetPlatform == TargetPlatform.linux) {
         return;
       }
@@ -503,15 +505,8 @@ class _AuthGateState extends State<AuthGate> {
       // Keep auth screen usable even if Google Sign-In init fails.
     }
   }
-
-  @override
-  void dispose() {
-    _emailController.dispose();
-    _passwordController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _signInWithGoogle() async {
+  
+Future<void> _signInWithGoogle() async {
     if (!widget.firebaseState.isReady) {
       return;
     }
@@ -522,49 +517,51 @@ class _AuthGateState extends State<AuthGate> {
         _clearMessage();
         return;
       }
-      
-      // For macOS and Windows, use signInWithProvider which opens a browser
+
+      // For macOS and Windows, create a credential from a Google ID token
+      // using the redirect-based flow that opens the browser
       if (defaultTargetPlatform == TargetPlatform.macOS ||
           defaultTargetPlatform == TargetPlatform.windows) {
         try {
-          await _firebaseAuth.signInWithProvider(GoogleAuthProvider());
-          _clearMessage();
-          return;
+          // Use signInWithProvider which handles the browser redirect
+          final result = await _firebaseAuth.signInWithProvider(
+            GoogleAuthProvider()
+              ..addScope('email')
+              ..addScope('profile'),
+          );
+          if (result.user != null) {
+            _clearMessage();
+            return;
+          }
         } catch (e) {
+          // Fall through to try the standard method
+        }
+      }
+
+      // For Android/iOS or as fallback, try the GoogleSignIn SDK
+      try {
+        final account = await _googleSignIn.authenticate();
+        final googleAuth = await account.authentication;
+        final idToken = googleAuth.idToken;
+        final credential = GoogleAuthProvider.credential(idToken: idToken);
+        await _firebaseAuth.signInWithCredential(credential);
+        _clearMessage();
+        return;
+      } catch (e) {
+        if (defaultTargetPlatform == TargetPlatform.macOS ||
+            defaultTargetPlatform == TargetPlatform.windows) {
           _showMessage(
-            'Browser sign-in failed. Please try email/password instead.\n\n'
-            'Error: ${e.toString()}',
+            'Google sign-in failed. Please use email/password instead.',
           );
           return;
         }
+        rethrow;
       }
-      
-      // For Android/iOS, use the native Google Sign-In SDK
-      final account = await _googleSignIn.authenticate();
-      if (account == null) {
-        // User cancelled
-        setState(() => _isSigningIn = false);
-        return;
-      }
-      
-      final googleAuth = await account.authentication;
-      final idToken = googleAuth.idToken;
-      if (idToken == null) {
-        throw FirebaseAuthException(
-          code: 'missing-google-id-token',
-          message: 'Google did not return an ID token.',
-        );
-      }
-
-      final credential = GoogleAuthProvider.credential(idToken: idToken);
-      await _firebaseAuth.signInWithCredential(credential);
-      _clearMessage();
     } on FirebaseAuthException catch (error) {
       _showMessage(error.message ?? 'Google sign-in failed.');
     } catch (error) {
       _showMessage(
-        'Google sign-in failed (${error.runtimeType}). '
-        'Try email/password instead.',
+        'Google sign-in failed. Please use email/password instead.',
       );
     } finally {
       if (mounted) {
@@ -572,7 +569,7 @@ class _AuthGateState extends State<AuthGate> {
       }
     }
   }
-  
+
   Future<void> _submitEmailAuth() async {
     if (!widget.firebaseState.isReady) {
       return;
