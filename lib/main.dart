@@ -541,8 +541,14 @@ Future<void> _signInWithGoogle() async {
       // For Android/iOS or as fallback, try the GoogleSignIn SDK
       try {
         final account = await _googleSignIn.authenticate();
-        final googleAuth = await account.authentication;
+        final googleAuth = account.authentication;
         final idToken = googleAuth.idToken;
+        if (idToken == null) {
+          throw FirebaseAuthException(
+            code: 'missing-google-id-token',
+            message: 'Google did not return an ID token.',
+          );
+        }
         final credential = GoogleAuthProvider.credential(idToken: idToken);
         await _firebaseAuth.signInWithCredential(credential);
         _clearMessage();
