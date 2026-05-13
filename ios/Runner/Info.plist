@@ -39,6 +39,8 @@
 	<string>84736062319-t0og78d4m577r496q3b25lj23fi8eotq.apps.googleusercontent.com</string>
 	<key>LSRequiresIPhoneOS</key>
 	<true/>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>HelpHer uses your location to include it in emergency SOS alerts sent to your contacts.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>HelpHer uses your camera so you can set a profile picture.</string>
 	<key>NSPhotoLibraryUsageDescription</key>

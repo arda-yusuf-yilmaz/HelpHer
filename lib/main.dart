@@ -15,6 +15,7 @@ import 'package:file_selector/file_selector.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:cryptography/cryptography.dart';
+import 'package:geolocator/geolocator.dart';
 import 'dart:convert';
 
 import 'firebase_options.dart';
@@ -3155,11 +3156,35 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
     }
   }
 
+  Future<String?> _getLocationLink() async {
+    try {
+      LocationPermission permission = await Geolocator.checkPermission();
+      if (permission == LocationPermission.denied) {
+        permission = await Geolocator.requestPermission();
+      }
+      if (permission == LocationPermission.denied ||
+          permission == LocationPermission.deniedForever) {
+        return null;
+      }
+      final position = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(
+          accuracy: LocationAccuracy.high,
+          timeLimit: Duration(seconds: 3),
+        ),
+      );
+      return 'https://maps.google.com/?q=${position.latitude},${position.longitude}';
+    } catch (_) {
+      return null;
+    }
+  }
+
   Future<void> _sendAlertSmsToAll() async {
     final platform = Theme.of(context).platform;
+    final locationLink = await _getLocationLink();
+    final locationSuffix = locationLink != null ? ' My location: $locationLink' : '';
     if (!supportsNativeSms(platform)) {
       final text =
-          'SOS alert from HelpHer user ${widget.profile.name}. Please check on me immediately.';
+          'SOS alert from HelpHer user ${widget.profile.name}. Please check on me immediately.$locationSuffix';
       await Clipboard.setData(ClipboardData(text: text));
       if (mounted) {
         _showMessage(
@@ -3176,7 +3201,7 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
       return;
     }
     final text =
-        'SOS alert from HelpHer user ${widget.profile.name}. Please check on me immediately.';
+        'SOS alert from HelpHer user ${widget.profile.name}. Please check on me immediately.$locationSuffix';
     try {
       await sendSMS(message: text, recipients: recipients);
       if (!mounted) {
@@ -3294,9 +3319,11 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
       _isSafetyCheckActive = true;
       _safetyCountdownSeconds = 0;
     });
+    final locationLink = await _getLocationLink();
+    final locationSuffix = locationLink != null ? ' Last known location: $locationLink' : '';
     await _sendStatusSmsToAll(
       text:
-          'No response from ${widget.profile.name} after an SOS alert. Please contact them urgently.',
+          'No response from ${widget.profile.name} after an SOS alert. Please contact them urgently.$locationSuffix',
       successMessage: 'Escalation alert sent to your contacts.',
       failureMessage: 'Could not send escalation alert.',
     );

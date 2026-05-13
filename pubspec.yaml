@@ -47,6 +47,7 @@ dependencies:
   file_selector: ^1.0.3
   flutter_secure_storage: ^9.2.4
   cryptography: ^2.7.0
+  geolocator: ^13.0.2
 
 dev_dependencies:
   flutter_test:
