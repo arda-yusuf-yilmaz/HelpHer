@@ -708,6 +708,25 @@ class _AuthGateState extends State<AuthGate> {
   void initState() {
     super.initState();
     _initGoogleSignIn();
+    if (kIsWeb) _handleEmailActionLink();
+  }
+
+  Future<void> _handleEmailActionLink() async {
+    final uri = Uri.base;
+    final mode = uri.queryParameters['mode'];
+    final oobCode = uri.queryParameters['oobCode'];
+    if (mode == null || oobCode == null) return;
+
+    try {
+      if (mode == 'verifyEmail') {
+        await _firebaseAuth.applyActionCode(oobCode);
+        await _firebaseAuth.currentUser?.reload();
+      } else if (mode == 'resetPassword') {
+        // Password reset is handled separately; nothing to do here.
+      }
+    } catch (_) {
+      // Invalid/expired code — user will see the normal auth screen.
+    }
   }
 
   Future<void> _initGoogleSignIn() async {
