@@ -19,7 +19,7 @@
 			<string>Editor</string>
 			<key>CFBundleURLSchemes</key>
 			<array>
-				<string>com.googleusercontent.apps.84736062319-va2jh6u51bd2n2ueqqtv9dqicgtg8jks</string>
+				<string>com.googleusercontent.apps.84736062319-saqcgrb4c83d83dl2k4pcfpcs0ugj5da</string>
 			</array>
 		</dict>
 	</array>
@@ -40,6 +40,6 @@
 	<key>NSPrincipalClass</key>
 	<string>NSApplication</string>
 	<key>GIDClientID</key>
-	<string>84736062319-va2jh6u51bd2n2ueqqtv9dqicgtg8jks.apps.googleusercontent.com</string>
+	<string>84736062319-saqcgrb4c83d83dl2k4pcfpcs0ugj5da.apps.googleusercontent.com</string>
 </dict>
 </plist>
