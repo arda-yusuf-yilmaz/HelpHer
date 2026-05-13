@@ -18,6 +18,14 @@ service firebase.storage {
       allow read, write: if false;
     }
 
+    match /chatRooms/{roomId}/photo.jpg {
+      allow read: if signedIn();
+      allow write: if signedIn()
+                   && request.resource.contentType == 'image/jpeg'
+                   && request.resource.size <= 5 * 1024 * 1024;
+      allow delete: if signedIn();
+    }
+
     match /{allPaths=**} {
       allow read, write: if false;
     }

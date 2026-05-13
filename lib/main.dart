@@ -875,7 +875,6 @@ Future<void> _signInWithGoogle() async {
       final photoUrl = (userData?['photoUrl'] as String?)?.trim();
       await _firestore.collection('userDirectory').doc(user.uid).set({
         'uid': user.uid,
-        'email': email,
         'displayName': user.displayName?.trim(),
         if (username != null && username.isNotEmpty) 'username': username,
         if (username != null && username.isNotEmpty) 'usernameLower': username,
@@ -1474,18 +1473,15 @@ class _ChooseUsernameScreenState extends State<ChooseUsernameScreen> {
           'usernameLower': key,
         }, SetOptions(merge: true));
       });
-      if (email != null && email.isNotEmpty) {
-        await _firestore
-            .collection('userDirectory')
-            .doc(widget.currentUserUid)
-            .set({
-              'uid': widget.currentUserUid,
-              'email': email,
-              'username': key,
-              'usernameLower': key,
-              'updatedAt': FieldValue.serverTimestamp(),
-            }, SetOptions(merge: true));
-      }
+      await _firestore
+          .collection('userDirectory')
+          .doc(widget.currentUserUid)
+          .set({
+            'uid': widget.currentUserUid,
+            'username': key,
+            'usernameLower': key,
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
       // AuthGate's StreamBuilder on the users doc will now see usernameLower
       // and automatically transition to MainShell — no manual navigation needed.
     } on FirebaseException catch (e) {
@@ -3585,8 +3581,63 @@ class ChatsScreen extends StatefulWidget {
 
 class _ChatsScreenState extends State<ChatsScreen> {
   FirebaseFirestore get _firestore => FirebaseFirestore.instance;
+  FirebaseStorage get _storage => FirebaseStorage.instance;
   CollectionReference<Map<String, dynamic>> get _roomsCollection =>
       _firestore.collection('chatRooms');
+
+  Widget _chatAvatar(String? photoUrl, bool isDirect) {
+    if (photoUrl != null && photoUrl.isNotEmpty) {
+      return CircleAvatar(
+        backgroundImage: NetworkImage(photoUrl),
+        backgroundColor: AppColors.brandLight,
+      );
+    }
+    return CircleAvatar(
+      backgroundColor: AppColors.brandLight,
+      child: Icon(
+        isDirect ? Icons.person : Icons.group,
+        color: AppColors.brand,
+      ),
+    );
+  }
+
+  Future<void> _changeGroupPhoto(BuildContext ctx, String roomId) async {
+    final platform = Theme.of(ctx).platform;
+    try {
+      Uint8List? bytes;
+      if (kIsWeb ||
+          platform == TargetPlatform.android ||
+          platform == TargetPlatform.iOS) {
+        final picked = await ImagePicker().pickImage(
+          source: ImageSource.gallery,
+          imageQuality: 82,
+          maxWidth: 800,
+        );
+        if (picked == null) return;
+        bytes = await picked.readAsBytes();
+      } else {
+        const group = XTypeGroup(
+          label: 'Images',
+          extensions: <String>['jpg', 'jpeg', 'png', 'webp'],
+        );
+        final file = await openFile(acceptedTypeGroups: [group]);
+        if (file == null) return;
+        bytes = await file.readAsBytes();
+      }
+      if (bytes == null || bytes.isEmpty) return;
+      final ref = _storage
+          .ref()
+          .child('chatRooms')
+          .child(roomId)
+          .child('photo.jpg');
+      await ref.putData(bytes, SettableMetadata(contentType: 'image/jpeg'));
+      final url =
+          '${await ref.getDownloadURL()}?v=${DateTime.now().millisecondsSinceEpoch}';
+      await _roomsCollection.doc(roomId).update({'photoUrl': url});
+    } catch (e) {
+      if (mounted) _showChatSnack('Failed to update photo: $e');
+    }
+  }
 
   String _directKeyFor(String a, String b) {
     final sorted = [a, b]..sort();
@@ -3996,6 +4047,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                         (data['lastMessage'] as String?)?.trim() ?? '';
                     final type = (data['type'] as String?) ?? 'group';
                     final roomMembers = (data['members'] as List?) ?? const [];
+                    final groupPhotoUrl = data['photoUrl'] as String?;
                     final lastBy = (data['lastMessageBy'] as String?) ?? '';
                     final lastAtRaw = data['lastMessageAt'];
                     final lastAt = lastAtRaw is Timestamp ? lastAtRaw : null;
@@ -4013,15 +4065,9 @@ class _ChatsScreenState extends State<ChatsScreen> {
                         lastBy != myUid &&
                         (myReadAt == null ||
                             lastAt.toDate().isAfter(myReadAt.toDate()));
-                    final card = Card(
+                    Widget buildCard(Widget avatar) => Card(
                       child: ListTile(
-                        leading: CircleAvatar(
-                          backgroundColor: AppColors.brandLight,
-                          child: Icon(
-                            type == 'direct' ? Icons.person : Icons.group,
-                            color: AppColors.brand,
-                          ),
-                        ),
+                        leading: avatar,
                         title: Text(roomName),
                         subtitle: Text(
                           lastMessage.isEmpty
@@ -4049,7 +4095,19 @@ class _ChatsScreenState extends State<ChatsScreen> {
                       ),
                     );
                     if (type == 'direct') {
-                      return Dismissible(
+                      final otherUid = roomMembers
+                          .whereType<String>()
+                          .firstWhere((m) => m != myUid, orElse: () => '');
+                      return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
+                        stream: otherUid.isNotEmpty
+                            ? _firestore
+                                .collection('userDirectory')
+                                .doc(otherUid)
+                                .snapshots()
+                            : const Stream.empty(),
+                        builder: (ctx, dirSnap) {
+                          final photoUrl = dirSnap.data?.data()?['photoUrl'] as String?;
+                          return Dismissible(
                         key: Key(roomDoc.id),
                         direction: DismissDirection.endToStart,
                         background: Container(
@@ -4093,12 +4151,16 @@ class _ChatsScreenState extends State<ChatsScreen> {
                               false;
                         },
                         onDismissed: (_) => _deleteDirectChat(roomDoc.id),
-                        child: card,
+                        child: buildCard(_chatAvatar(photoUrl, true)),
+                      );
+                        },
                       );
                     }
                     return PopupMenuButton<String>(
                       onSelected: (value) async {
-                        if (value == 'leave') {
+                        if (value == 'photo') {
+                          await _changeGroupPhoto(context, roomDoc.id);
+                        } else if (value == 'leave') {
                           final confirmed =
                               await showDialog<bool>(
                                 context: context,
@@ -4131,6 +4193,20 @@ class _ChatsScreenState extends State<ChatsScreen> {
                       },
                       itemBuilder: (_) => const [
                         PopupMenuItem(
+                          value: 'photo',
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.photo_camera,
+                                color: AppColors.brand,
+                                size: 18,
+                              ),
+                              SizedBox(width: 8),
+                              Text('Change photo'),
+                            ],
+                          ),
+                        ),
+                        PopupMenuItem(
                           value: 'leave',
                           child: Row(
                             children: [
@@ -4145,7 +4221,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                           ),
                         ),
                       ],
-                      child: card,
+                      child: buildCard(_chatAvatar(groupPhotoUrl, false)),
                     );
                   },
                 );
@@ -6319,26 +6395,20 @@ class _ProfileScreenState extends State<ProfileScreen> {
       await _firestore.collection('users').doc(widget.currentUserUid).set({
         'displayName': next,
       }, SetOptions(merge: true));
-      final email = FirebaseAuth.instance.currentUser?.email
-          ?.trim()
-          .toLowerCase();
-      if (email != null && email.isNotEmpty) {
-        await _firestore
-            .collection('userDirectory')
-            .doc(widget.currentUserUid)
-            .set({
-              'uid': widget.currentUserUid,
-              'email': email,
-              'displayName': next,
-              if (widget.profile.username != null)
-                'username': widget.profile.username,
-              if (widget.profile.username != null)
-                'usernameLower': widget.profile.username,
-              if (widget.profile.photoUrl != null)
-                'photoUrl': widget.profile.photoUrl,
-              'updatedAt': FieldValue.serverTimestamp(),
-            }, SetOptions(merge: true));
-      }
+      await _firestore
+          .collection('userDirectory')
+          .doc(widget.currentUserUid)
+          .set({
+            'uid': widget.currentUserUid,
+            'displayName': next,
+            if (widget.profile.username != null)
+              'username': widget.profile.username,
+            if (widget.profile.username != null)
+              'usernameLower': widget.profile.username,
+            if (widget.profile.photoUrl != null)
+              'photoUrl': widget.profile.photoUrl,
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
       widget.onNameSaved(next);
       _showSnack('Profile updated.');
     } catch (error) {
@@ -6407,21 +6477,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
           'username': key,
           'usernameLower': key,
         }, SetOptions(merge: true));
-        if (email != null && email.isNotEmpty) {
-          await _firestore
-              .collection('userDirectory')
-              .doc(widget.currentUserUid)
-              .set({
-                'uid': widget.currentUserUid,
-                'email': email,
-                if (displayName.isNotEmpty) 'displayName': displayName,
-                'username': key,
-                'usernameLower': key,
-                if (widget.profile.photoUrl != null)
-                  'photoUrl': widget.profile.photoUrl,
-                'updatedAt': FieldValue.serverTimestamp(),
-              }, SetOptions(merge: true));
-        }
+        await _firestore
+            .collection('userDirectory')
+            .doc(widget.currentUserUid)
+            .set({
+              'uid': widget.currentUserUid,
+              if (displayName.isNotEmpty) 'displayName': displayName,
+              'username': key,
+              'usernameLower': key,
+              if (widget.profile.photoUrl != null)
+                'photoUrl': widget.profile.photoUrl,
+              'updatedAt': FieldValue.serverTimestamp(),
+            }, SetOptions(merge: true));
         final unameRef = _firestore.collection('usernames').doc(key);
         final unameSnap = await unameRef.get();
         if (unameSnap.exists) {
@@ -6545,24 +6612,18 @@ class _ProfileScreenState extends State<ProfileScreen> {
       await _firestore.collection('users').doc(widget.currentUserUid).set({
         'photoUrl': downloadUrl,
       }, SetOptions(merge: true));
-      final email = FirebaseAuth.instance.currentUser?.email
-          ?.trim()
-          .toLowerCase();
-      if (email != null && email.isNotEmpty) {
-        await _firestore
-            .collection('userDirectory')
-            .doc(widget.currentUserUid)
-            .set({
-              'uid': widget.currentUserUid,
-              'email': email,
-              if (widget.profile.username != null)
-                'username': widget.profile.username,
-              if (widget.profile.username != null)
-                'usernameLower': widget.profile.username,
-              'photoUrl': downloadUrl,
-              'updatedAt': FieldValue.serverTimestamp(),
-            }, SetOptions(merge: true));
-      }
+      await _firestore
+          .collection('userDirectory')
+          .doc(widget.currentUserUid)
+          .set({
+            'uid': widget.currentUserUid,
+            if (widget.profile.username != null)
+              'username': widget.profile.username,
+            if (widget.profile.username != null)
+              'usernameLower': widget.profile.username,
+            'photoUrl': downloadUrl,
+            'updatedAt': FieldValue.serverTimestamp(),
+          }, SetOptions(merge: true));
       widget.onPhotoUrlSaved(downloadUrl);
       _showSnack('Profile picture updated.');
     } on FirebaseException catch (error) {
