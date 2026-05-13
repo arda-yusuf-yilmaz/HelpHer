@@ -48,6 +48,11 @@ jobs:
 
       - name: Build macOS release
         run: flutter build macos --release
+        env:
+          FLUTTER_XCODE_CODE_SIGNING_ALLOWED: "NO"
+          FLUTTER_XCODE_CODE_SIGNING_REQUIRED: "NO"
+          FLUTTER_XCODE_CODE_SIGN_IDENTITY: "-"
+          FLUTTER_XCODE_PROVISIONING_PROFILE_SPECIFIER: ""
 
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4

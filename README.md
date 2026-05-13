@@ -69,6 +69,14 @@ Paste each copied value into the matching GitHub secret. If you rotate Firebase
 or OAuth clients, regenerate the affected files locally and update the matching
 secret.
 
+## macOS Builds in CI
+
+The macOS workflows build unsigned release artifacts by disabling Xcode code
+signing in GitHub Actions. This avoids storing Apple certificates or
+provisioning profiles in repository secrets. If you later need a notarized app
+for public distribution, add a separate signed release workflow with Apple
+Developer certificate/profile secrets.
+
 ## Project Structure
 
 - `lib/main.dart`: application entry point and primary UI/feature flows
