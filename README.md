@@ -42,6 +42,33 @@ If Google sign-in fails in web mode:
   - Include `localhost` for local testing
   - Include your Firebase Hosting domain (for example `your-app.web.app`)
 
+## Firebase Config in CI
+
+Firebase client config files are intentionally ignored by git. GitHub Actions
+restores them from base64-encoded repository secrets before running Flutter.
+
+Create these GitHub repository secrets:
+
+```text
+FIREBASE_OPTIONS_DART_B64
+ANDROID_GOOGLE_SERVICES_JSON_B64
+IOS_GOOGLE_SERVICE_INFO_PLIST_B64
+MACOS_GOOGLE_SERVICE_INFO_PLIST_B64
+```
+
+Generate each secret from your local files:
+
+```bash
+base64 -i lib/firebase_options.dart | pbcopy
+base64 -i android/app/google-services.json | pbcopy
+base64 -i ios/Runner/GoogleService-Info.plist | pbcopy
+base64 -i macos/Runner/GoogleService-Info.plist | pbcopy
+```
+
+Paste each copied value into the matching GitHub secret. If you rotate Firebase
+or OAuth clients, regenerate the affected files locally and update the matching
+secret.
+
 ## Project Structure
 
 - `lib/main.dart`: application entry point and primary UI/feature flows

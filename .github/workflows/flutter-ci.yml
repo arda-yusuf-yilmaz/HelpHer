@@ -1,4 +1,4 @@
-name: macOS desktop build
+name: Flutter CI
 
 on:
   workflow_dispatch:
@@ -9,8 +9,8 @@ on:
     types: [ opened, synchronize, reopened ]
 
 jobs:
-  build-macos:
-    runs-on: macos-latest
+  analyze-test:
+    runs-on: ubuntu-latest
 
     steps:
       - name: Checkout
@@ -30,12 +30,6 @@ jobs:
           IOS_GOOGLE_SERVICE_INFO_PLIST_B64: ${{ secrets.IOS_GOOGLE_SERVICE_INFO_PLIST_B64 }}
           MACOS_GOOGLE_SERVICE_INFO_PLIST_B64: ${{ secrets.MACOS_GOOGLE_SERVICE_INFO_PLIST_B64 }}
 
-      - name: Flutter doctor
-        run: flutter doctor -v
-
-      - name: Enable macOS desktop
-        run: flutter config --enable-macos-desktop
-
       - name: Install dependencies
         run: flutter pub get
 
@@ -44,12 +38,3 @@ jobs:
 
       - name: Tests
         run: flutter test
-
-      - name: Build macOS release
-        run: flutter build macos --release
-
-      - name: Upload macOS artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: helpher-macos-release
-          path: build/macos/Build/Products/Release/
