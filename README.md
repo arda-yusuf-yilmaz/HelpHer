@@ -50,10 +50,10 @@ restores them from base64-encoded repository secrets before running Flutter.
 Create these GitHub repository secrets:
 
 ```text
-FIREBASE_OPTIONS_DART_B64
-ANDROID_GOOGLE_SERVICES_JSON_B64
-IOS_GOOGLE_SERVICE_INFO_PLIST_B64
-MACOS_GOOGLE_SERVICE_INFO_PLIST_B64
+FIREBASE_OPTIONS_DART_B64                 required for all workflows
+ANDROID_GOOGLE_SERVICES_JSON_B64          optional until Android CI/builds are added
+IOS_GOOGLE_SERVICE_INFO_PLIST_B64         optional until iOS CI/builds are added
+MACOS_GOOGLE_SERVICE_INFO_PLIST_B64       required for macOS builds
 ```
 
 Generate each secret from your local files:
