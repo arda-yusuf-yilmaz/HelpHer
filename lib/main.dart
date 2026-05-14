@@ -1494,12 +1494,18 @@ class _ChooseUsernameScreenState extends State<ChooseUsernameScreen> {
       // AuthGate's StreamBuilder on the users doc will now see usernameLower
       // and automatically transition to MainShell — no manual navigation needed.
     } on FirebaseException catch (e) {
-      setState(
-        () => _errorMessage =
-            e.message ?? 'Could not save username. Please try another.',
-      );
+      if (mounted) {
+        setState(
+          () => _errorMessage =
+              e.message ?? 'Could not save username. Please try another.',
+        );
+      }
     } catch (e) {
-      setState(() => _errorMessage = 'Something went wrong. Please try again.');
+      if (mounted) {
+        setState(
+          () => _errorMessage = 'Something went wrong. Please try again.',
+        );
+      }
     } finally {
       if (mounted) setState(() => _isSaving = false);
     }
