@@ -112,6 +112,7 @@ Future<FirebaseBootstrapState> _initializeFirebase() async {
         providerApple: kDebugMode
             ? const AppleDebugProvider()
             : const AppleDeviceCheckProvider(),
+        providerWindows: const WindowsDebugProvider(),
       );
     }
     return const FirebaseBootstrapState.ready();
