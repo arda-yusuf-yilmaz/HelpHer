@@ -57,5 +57,5 @@ jobs:
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
         with:
-          name: helpher-macos-release
+          name: HelpHer-macos-release
           path: build/macos/Build/Products/Release/

@@ -41,6 +41,7 @@ post_install do |installer|
     target.build_configurations.each do |config|
       # Keep all pod targets aligned with the app minimum macOS version.
       config.build_settings['MACOSX_DEPLOYMENT_TARGET'] = '10.15'
+      config.build_settings['OTHER_LDFLAGS'] = '$(inherited) -Wl,-no_warn_duplicate_libraries'
     end
   end
 end

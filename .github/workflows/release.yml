@@ -128,7 +128,7 @@ jobs:
         run: |
           set -euo pipefail
           TAG="${GITHUB_REF_NAME}"
-          APP_PATH="build/macos/Build/Products/Release/helpher.app"
+          APP_PATH="build/macos/Build/Products/Release/HelpHer.app"
           DMG="HelpHer-${TAG}-macOS.dmg"
           if [ ! -d "${APP_PATH}" ]; then
             echo "Expected app not found at ${APP_PATH}"
