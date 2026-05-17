@@ -124,6 +124,7 @@ jobs:
           FLUTTER_XCODE_DEVELOPMENT_TEAM: ${{ secrets.APPLE_TEAM_ID }}
           FLUTTER_XCODE_CODE_SIGNING_REQUIRED: "YES"
           FLUTTER_XCODE_CODE_SIGNING_ALLOWED: "YES"
+          FLUTTER_XCODE_PROVISIONING_PROFILE_SPECIFIER: ""
 
       - name: Package macOS build (dmg)
         run: |
