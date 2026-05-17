@@ -131,7 +131,16 @@ jobs:
           set -euo pipefail
           APP_PATH="build/macos/Build/Products/Release/HelpHer.app"
           IDENTITY="Developer ID Application: Arda Yusuf YILMAZ ($APPLE_TEAM_ID)"
-          codesign --deep --force --verify --verbose \
+          # Sign dylibs first
+          find "$APP_PATH/Contents/Frameworks" -name "*.dylib" | while read f; do
+            codesign --force --sign "$IDENTITY" --options runtime "$f"
+          done
+          # Sign frameworks (sorted reverse so nested ones come first)
+          find "$APP_PATH/Contents/Frameworks" -name "*.framework" | sort -r | while read f; do
+            codesign --force --sign "$IDENTITY" --options runtime "$f"
+          done
+          # Sign the main app bundle last
+          codesign --force --verify --verbose \
             --sign "$IDENTITY" \
             --options runtime \
             --entitlements macos/Runner/Release.entitlements \
