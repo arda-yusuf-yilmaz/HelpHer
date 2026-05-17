@@ -119,6 +119,7 @@ jobs:
       - name: Build macOS release
         run: flutter build macos --release
         env:
+          FLUTTER_XCODE_CODE_SIGN_STYLE: "Manual"
           FLUTTER_XCODE_CODE_SIGN_IDENTITY: "Developer ID Application"
           FLUTTER_XCODE_DEVELOPMENT_TEAM: ${{ secrets.APPLE_TEAM_ID }}
           FLUTTER_XCODE_CODE_SIGNING_REQUIRED: "YES"
