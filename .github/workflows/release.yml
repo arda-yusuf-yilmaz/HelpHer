@@ -110,7 +110,7 @@ jobs:
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           echo "$MACOS_CERTIFICATE" | base64 --decode > /tmp/certificate.p12
           security import /tmp/certificate.p12 -k "$KEYCHAIN_PATH" \
-            -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
+            -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign -T /usr/bin/xcodebuild
           security list-keychain -d user -s "$KEYCHAIN_PATH"
           security set-key-partition-list -S apple-tool:,apple: -s \
             -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
@@ -118,34 +118,6 @@ jobs:
 
       - name: Build macOS release
         run: flutter build macos --release
-        env:
-          FLUTTER_XCODE_CODE_SIGNING_ALLOWED: "NO"
-          FLUTTER_XCODE_CODE_SIGNING_REQUIRED: "NO"
-          FLUTTER_XCODE_CODE_SIGN_IDENTITY: "-"
-          FLUTTER_XCODE_PROVISIONING_PROFILE_SPECIFIER: ""
-
-      - name: Sign macOS app
-        env:
-          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: |
-          set -euo pipefail
-          APP_PATH="build/macos/Build/Products/Release/HelpHer.app"
-          IDENTITY="Developer ID Application: Arda Yusuf YILMAZ ($APPLE_TEAM_ID)"
-          # Sign dylibs first (no --options runtime; library validation is disabled via entitlement)
-          find "$APP_PATH/Contents/Frameworks" -name "*.dylib" | while read f; do
-            codesign --force --sign "$IDENTITY" "$f"
-          done
-          # Sign frameworks (sorted reverse so nested ones come first)
-          find "$APP_PATH/Contents/Frameworks" -name "*.framework" | sort -r | while read f; do
-            codesign --force --sign "$IDENTITY" "$f"
-          done
-          # Sign the main app bundle last
-          codesign --force --verify --verbose \
-            --sign "$IDENTITY" \
-            --options runtime \
-            --entitlements macos/Runner/Release.entitlements \
-            "$APP_PATH"
-          echo "Signed $APP_PATH"
 
       - name: Package macOS build (dmg)
         run: |
