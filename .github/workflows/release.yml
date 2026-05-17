@@ -119,12 +119,24 @@ jobs:
       - name: Build macOS release
         run: flutter build macos --release
         env:
-          FLUTTER_XCODE_CODE_SIGN_STYLE: "Manual"
-          FLUTTER_XCODE_CODE_SIGN_IDENTITY: "Developer ID Application"
-          FLUTTER_XCODE_DEVELOPMENT_TEAM: ${{ secrets.APPLE_TEAM_ID }}
-          FLUTTER_XCODE_CODE_SIGNING_REQUIRED: "YES"
-          FLUTTER_XCODE_CODE_SIGNING_ALLOWED: "YES"
+          FLUTTER_XCODE_CODE_SIGNING_ALLOWED: "NO"
+          FLUTTER_XCODE_CODE_SIGNING_REQUIRED: "NO"
+          FLUTTER_XCODE_CODE_SIGN_IDENTITY: "-"
           FLUTTER_XCODE_PROVISIONING_PROFILE_SPECIFIER: ""
+
+      - name: Sign macOS app
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          APP_PATH="build/macos/Build/Products/Release/HelpHer.app"
+          IDENTITY="Developer ID Application: Arda Yusuf YILMAZ ($APPLE_TEAM_ID)"
+          codesign --deep --force --verify --verbose \
+            --sign "$IDENTITY" \
+            --options runtime \
+            --entitlements macos/Runner/Release.entitlements \
+            "$APP_PATH"
+          echo "Signed $APP_PATH"
 
       - name: Package macOS build (dmg)
         run: |
