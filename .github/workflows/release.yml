@@ -110,14 +110,51 @@ jobs:
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           echo "$MACOS_CERTIFICATE" | base64 --decode > /tmp/certificate.p12
           security import /tmp/certificate.p12 -k "$KEYCHAIN_PATH" \
-            -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign -T /usr/bin/xcodebuild
+            -P "$MACOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
           security list-keychain -d user -s "$KEYCHAIN_PATH"
           security set-key-partition-list -S apple-tool:,apple: -s \
             -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           rm /tmp/certificate.p12
 
-      - name: Build macOS release
+      - name: Build macOS release (unsigned)
         run: flutter build macos --release
+        env:
+          FLUTTER_XCODE_CODE_SIGNING_ALLOWED: "NO"
+          FLUTTER_XCODE_CODE_SIGNING_REQUIRED: "NO"
+          FLUTTER_XCODE_CODE_SIGN_IDENTITY: "-"
+          FLUTTER_XCODE_PROVISIONING_PROFILE_SPECIFIER: ""
+
+      - name: Sign macOS app
+        env:
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          APP="build/macos/Build/Products/Release/HelpHer.app"
+          ID="Developer ID Application: Arda Yusuf YILMAZ ($APPLE_TEAM_ID)"
+          ENTITLEMENTS="macos/Runner/Release.entitlements"
+
+          # 1. Sign all dylibs (no --options runtime — they don't need it)
+          find "$APP/Contents/Frameworks" -name "*.dylib" | while read f; do
+            codesign --force --sign "$ID" "$f"
+          done
+
+          # 2. Sign frameworks inside-out: deepest paths first
+          find "$APP/Contents/Frameworks" -name "*.framework" -print \
+            | awk '{ print length, $0 }' | sort -rn | awk '{print $2}' \
+            | while read f; do
+              codesign --force --sign "$ID" "$f"
+            done
+
+          # 3. Sign the app bundle with hardened runtime + entitlements
+          codesign --force --verify --verbose \
+            --sign "$ID" \
+            --options runtime \
+            --entitlements "$ENTITLEMENTS" \
+            "$APP"
+
+          # 4. Verify the result
+          codesign --verify --deep --strict "$APP"
+          echo "✓ Signed and verified $APP"
 
       - name: Package macOS build (dmg)
         run: |
