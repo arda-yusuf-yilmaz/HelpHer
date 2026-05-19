@@ -717,12 +717,13 @@ class _AuthGateState extends State<AuthGate> {
       if (kIsWeb) {
         return;
       }
-      // Skip GoogleSignIn init on desktop — we'll use Firebase's browser flow
-      if (defaultTargetPlatform == TargetPlatform.macOS ||
-          defaultTargetPlatform == TargetPlatform.windows ||
+      // Windows and Linux have no native Google Sign-In SDK; skip init there.
+      if (defaultTargetPlatform == TargetPlatform.windows ||
           defaultTargetPlatform == TargetPlatform.linux) {
         return;
       }
+      // iOS and macOS: initialise with the OAuth client ID from Firebase config
+      // so the SDK uses the same client as Firebase Auth expects.
       final clientId = DefaultFirebaseOptions.currentPlatform.iosClientId;
       if (clientId != null && clientId.isNotEmpty) {
         await _googleSignIn.initialize(clientId: clientId);
@@ -746,51 +747,32 @@ Future<void> _signInWithGoogle() async {
         return;
       }
 
-      // For macOS and Windows, create a credential from a Google ID token
-      // using the redirect-based flow that opens the browser
-      if (defaultTargetPlatform == TargetPlatform.macOS ||
-          defaultTargetPlatform == TargetPlatform.windows) {
-        try {
-          // Use signInWithProvider which handles the browser redirect
-          final result = await _firebaseAuth.signInWithProvider(
-            GoogleAuthProvider()
-              ..addScope('email')
-              ..addScope('profile'),
-          );
-          if (result.user != null) {
-            _clearMessage();
-            return;
-          }
-        } catch (e) {
-          // Fall through to try the standard method
+      // Windows has no native Google Sign-In SDK; use Firebase's browser flow.
+      if (defaultTargetPlatform == TargetPlatform.windows) {
+        final result = await _firebaseAuth.signInWithProvider(
+          GoogleAuthProvider()
+            ..addScope('email')
+            ..addScope('profile'),
+        );
+        if (result.user != null) {
+          _clearMessage();
+          return;
         }
       }
 
-      // For Android/iOS or as fallback, try the GoogleSignIn SDK
-      try {
-        final account = await _googleSignIn.authenticate();
-        final googleAuth = account.authentication;
-        final idToken = googleAuth.idToken;
-        if (idToken == null) {
-          throw FirebaseAuthException(
-            code: 'missing-google-id-token',
-            message: 'Google did not return an ID token.',
-          );
-        }
-        final credential = GoogleAuthProvider.credential(idToken: idToken);
-        await _firebaseAuth.signInWithCredential(credential);
-        _clearMessage();
-        return;
-      } catch (e) {
-        if (defaultTargetPlatform == TargetPlatform.macOS ||
-            defaultTargetPlatform == TargetPlatform.windows) {
-          _showMessage(
-            'Google sign-in failed. Please use email/password instead.',
-          );
-          return;
-        }
-        rethrow;
+      // iOS, macOS, Android: use the native GoogleSignIn SDK (GIDSignIn).
+      final account = await _googleSignIn.authenticate();
+      final googleAuth = account.authentication;
+      final idToken = googleAuth.idToken;
+      if (idToken == null) {
+        throw FirebaseAuthException(
+          code: 'missing-google-id-token',
+          message: 'Google did not return an ID token.',
+        );
       }
+      final credential = GoogleAuthProvider.credential(idToken: idToken);
+      await _firebaseAuth.signInWithCredential(credential);
+      _clearMessage();
     } on FirebaseAuthException catch (error) {
       _showMessage(_friendlyAuthError(error.message));
     } catch (error) {
