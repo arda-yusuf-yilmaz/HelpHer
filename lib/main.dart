@@ -776,9 +776,7 @@ Future<void> _signInWithGoogle() async {
     } on FirebaseAuthException catch (error) {
       _showMessage(_friendlyAuthError(error.message));
     } catch (error) {
-      _showMessage(
-        'Google sign-in failed. Please use email/password instead.',
-      );
+      _showMessage('Google sign-in error: $error');
     } finally {
       if (mounted) {
         setState(() => _isSigningIn = false);
