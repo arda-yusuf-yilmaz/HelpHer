@@ -846,6 +846,23 @@ Future<void> _signInWithGoogle() async {
     }
   }
 
+  Future<void> _resetPassword() async {
+    final email = _emailController.text.trim();
+    if (email.isEmpty) {
+      _showMessage('Enter your email address first, then tap "Forgot password?".');
+      return;
+    }
+    setState(() => _isSigningIn = true);
+    try {
+      await _firebaseAuth.sendPasswordResetEmail(email: email);
+      _showMessage('Password reset email sent to $email. Check your inbox.');
+    } on FirebaseAuthException catch (error) {
+      _showMessage(_friendlyAuthError(error.message));
+    } finally {
+      if (mounted) setState(() => _isSigningIn = false);
+    }
+  }
+
   Future<void> _signOut() async {
     await _firebaseAuth.signOut();
     if (!kIsWeb) {
@@ -1132,6 +1149,11 @@ Future<void> _signInWithGoogle() async {
                           : 'Need an account? Create one',
                     ),
                   ),
+                  if (!isCreateAccount)
+                    TextButton(
+                      onPressed: isBusy ? null : _resetPassword,
+                      child: const Text('Forgot password?'),
+                    ),
                   const SizedBox(height: 12),
                   SizedBox(
                     width: double.infinity,
