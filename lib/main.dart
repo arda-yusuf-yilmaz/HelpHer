@@ -112,11 +112,12 @@ Future<FirebaseBootstrapState> _initializeFirebase() async {
         providerApple: kDebugMode
             ? const AppleDebugProvider()
             : const AppleDeviceCheckProvider(),
-        // There is no production App Check provider for Windows in the
-        // Firebase Flutter SDK yet. Debug builds use the debug provider;
-        // release builds skip Windows App Check entirely. Compensate with
-        // strict Firestore/Storage rules and monitor for abuse in the console.
-        providerWindows: kDebugMode ? const WindowsDebugProvider() : null,
+        // The Firebase Flutter SDK has no production App Check provider for
+        // Windows — WindowsDebugProvider is the only available option and must
+        // be used unconditionally. Windows release builds therefore have no
+        // App Check attestation; compensate with strict Firestore/Storage
+        // security rules and monitor for abuse in the Firebase console.
+        providerWindows: const WindowsDebugProvider(),
       );
     }
     return const FirebaseBootstrapState.ready();
