@@ -44,6 +44,11 @@ service cloud.firestore {
       allow read, create, update, delete: if isEligibleUser() && request.auth.uid == userId;
     }
 
+    // FCM device tokens — users manage their own, Cloud Functions read all.
+    match /users/{userId}/fcmTokens/{tokenId} {
+      allow read, write, delete: if signedIn() && request.auth.uid == userId;
+    }
+
     // Encrypted E2EE key backup — only the owning user can read or write.
     match /users/{userId}/privateData/{doc} {
       allow read, write: if signedIn() && request.auth.uid == userId;
@@ -174,6 +179,14 @@ service cloud.firestore {
           request.auth.uid in get(/databases/$(database)/documents/chatRooms/$(roomId)).data.members;
       allow create: if isEligibleUser() &&
           request.auth.uid in get(/databases/$(database)/documents/chatRooms/$(roomId)).data.members &&
+          request.resource.data.senderUid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    // SOS alerts — any eligible user can trigger; all eligible users can read.
+    match /sosAlerts/{alertId} {
+      allow read: if isEligibleUser();
+      allow create: if isEligibleUser() &&
           request.resource.data.senderUid == request.auth.uid;
       allow update, delete: if false;
     }

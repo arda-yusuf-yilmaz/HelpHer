@@ -137,7 +137,11 @@ jobs:
           ID="Developer ID Application: Arda Yusuf YILMAZ ($APPLE_TEAM_ID)"
 
           # Install the provisioning profile so macOS accepts restricted
-          # entitlements (keychain-access-groups) in the Developer ID build.
+          # entitlements (keychain-access-groups, aps-environment) in the
+          # Developer ID build.
+          # ⚠️  The profile must include the Push Notifications capability.
+          # Regenerate it in Apple Developer → Profiles if codesign rejects
+          # the aps-environment entitlement.
           PP_PATH="$RUNNER_TEMP/build.provisionprofile"
           echo "$MACOS_PROVISIONING_PROFILE" | base64 --decode > "$PP_PATH"
           PP_UUID=$(security cms -D -i "$PP_PATH" | plutil -extract UUID raw -o - -)

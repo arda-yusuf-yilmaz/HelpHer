@@ -16,6 +16,7 @@ import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:cryptography/cryptography.dart';
 import 'package:geolocator/geolocator.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'dart:convert';
 
 import 'firebase_options.dart';
@@ -86,8 +87,23 @@ Future<Map<String, String>?> lookupHelpherUidByUsername(
   };
 }
 
+/// Top-level handler called when a push notification arrives while the app is
+/// terminated or in the background (Android / iOS / macOS).
+@pragma('vm:entry-point')
+Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
+  // Firebase is already initialised by the platform before this is called.
+  // No UI work here — the OS notification tray handles display.
+}
+
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  // Register background handler before Firebase.initializeApp() is called.
+  // Guarded because onBackgroundMessage is unsupported on Windows/Linux/Web.
+  if (!kIsWeb &&
+      defaultTargetPlatform != TargetPlatform.windows &&
+      defaultTargetPlatform != TargetPlatform.linux) {
+    FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
+  }
   GoogleFonts.config.allowRuntimeFetching = false;
   final firebaseState = await _initializeFirebase();
   runApp(HelpHerApp(firebaseState: firebaseState));
@@ -1719,6 +1735,7 @@ class _MainShellState extends State<MainShell>
     _loadArticles();
     _loadProfile();
     _initE2eeSetup();
+    _initFcm();
     if (kIsWeb && kWebAppCheckRecaptchaSiteKey.isEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) {
@@ -1935,6 +1952,61 @@ class _MainShellState extends State<MainShell>
       );
     });
     _saveContacts(updated);
+  }
+
+  Future<void> _initFcm() async {
+    // FCM background push is unsupported on Windows; skip token registration.
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.windows) return;
+    try {
+      final messaging = FirebaseMessaging.instance;
+      await messaging.requestPermission(
+        alert: true,
+        badge: true,
+        sound: true,
+      );
+      final token = await messaging.getToken();
+      if (token != null && token.isNotEmpty) {
+        await _firestore
+            .collection('users')
+            .doc(widget.currentUserUid)
+            .collection('fcmTokens')
+            .doc(token)
+            .set({
+          'token': token,
+          'platform': defaultTargetPlatform.name,
+          'updatedAt': FieldValue.serverTimestamp(),
+        });
+      }
+      // All users subscribe to the SOS broadcast topic.
+      await messaging.subscribeToTopic('sos_alerts');
+      // Show a snackbar for messages that arrive while the app is in the
+      // foreground (the OS tray handles background / terminated delivery).
+      FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+        if (!mounted) return;
+        final n = message.notification;
+        if (n == null) return;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (n.title != null)
+                  Text(
+                    n.title!,
+                    style: const TextStyle(fontWeight: FontWeight.bold),
+                  ),
+                if (n.body != null) Text(n.body!),
+              ],
+            ),
+            behavior: SnackBarBehavior.floating,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      });
+    } catch (_) {
+      // Non-critical — push notifications may not be available on this device.
+    }
   }
 
   Future<void> _initE2eeSetup() async {
@@ -2425,6 +2497,7 @@ class _MainShellState extends State<MainShell>
                   ),
                   EmergencyScreen(
                     profile: _profile,
+                    currentUserUid: widget.currentUserUid,
                     onOpenProfile: () => _switchTab(4, animated: true),
                   ),
                   ProfileScreen(
@@ -3163,11 +3236,13 @@ class ArticleCard extends StatelessWidget {
 class EmergencyScreen extends StatefulWidget {
   final UserProfileData profile;
   final VoidCallback onOpenProfile;
+  final String currentUserUid;
 
   const EmergencyScreen({
     super.key,
     required this.profile,
     required this.onOpenProfile,
+    required this.currentUserUid,
   });
 
   @override
@@ -3221,9 +3296,26 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
     }
   }
 
+  /// Fire-and-forget: write an SOS event to Firestore so Cloud Functions can
+  /// broadcast a push notification to all subscribed users.
+  void _writeSosAlert(String? locationLink) {
+    Future(() async {
+      await FirebaseFirestore.instance.collection('sosAlerts').add({
+        'senderUid': widget.currentUserUid,
+        'senderName': widget.profile.name,
+        if (locationLink != null) 'locationLink': locationLink,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+    }).catchError((_) {
+      // Non-critical: push alert may not reach users, but SMS is still sent.
+    });
+  }
+
   Future<void> _sendAlertSmsToAll() async {
     final platform = Theme.of(context).platform;
     final locationLink = await _getLocationLink();
+    // Trigger push notifications to all app users via Cloud Function.
+    _writeSosAlert(locationLink);
     final locationSuffix = locationLink != null ? ' My location: $locationLink' : '';
     if (!supportsNativeSms(platform)) {
       final text =
