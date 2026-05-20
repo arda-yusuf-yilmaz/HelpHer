@@ -130,14 +130,23 @@ jobs:
       - name: Sign macOS app
         env:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          MACOS_PROVISIONING_PROFILE: ${{ secrets.MACOS_PROVISIONING_PROFILE }}
         run: |
           set -euo pipefail
           APP="build/macos/Build/Products/Release/HelpHer.app"
           ID="Developer ID Application: Arda Yusuf YILMAZ ($APPLE_TEAM_ID)"
 
-          # codesign does not expand Xcode build variables, so pre-process
-          # the entitlements file to substitute $(AppIdentifierPrefix) and
-          # $(CFBundleIdentifier) before passing it to codesign.
+          # Install the provisioning profile so macOS accepts restricted
+          # entitlements (keychain-access-groups) in the Developer ID build.
+          PP_PATH="$RUNNER_TEMP/build.provisionprofile"
+          echo "$MACOS_PROVISIONING_PROFILE" | base64 --decode > "$PP_PATH"
+          PP_UUID=$(security cms -D -i "$PP_PATH" | plutil -extract UUID raw -o - -)
+          mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
+          cp "$PP_PATH" ~/Library/MobileDevice/Provisioning\ Profiles/"$PP_UUID".provisionprofile
+          # Embed in the app bundle (required for restricted entitlements)
+          cp "$PP_PATH" "$APP/Contents/embedded.provisionprofile"
+
+          # Expand Xcode build variables in entitlements before passing to codesign.
           BUNDLE_ID=$(defaults read "$(pwd)/$APP/Contents/Info.plist" CFBundleIdentifier)
           ENTITLEMENTS="$RUNNER_TEMP/processed.entitlements"
           sed "s/\$(AppIdentifierPrefix)/${APPLE_TEAM_ID}./g; \
