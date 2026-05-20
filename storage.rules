@@ -5,6 +5,13 @@ service firebase.storage {
       return request.auth != null;
     }
 
+    function isChatMember(roomId) {
+      return signedIn() &&
+          request.auth.uid in firestore.get(
+            /databases/(default)/documents/chatRooms/$(roomId)
+          ).data.members;
+    }
+
     match /users/{userId}/profile.jpg {
       allow read: if signedIn();
       allow write: if signedIn()
@@ -20,10 +27,10 @@ service firebase.storage {
 
     match /chatRooms/{roomId}/photo.jpg {
       allow read: if signedIn();
-      allow write: if signedIn()
+      allow write: if isChatMember(roomId)
                    && request.resource.contentType == 'image/jpeg'
                    && request.resource.size <= 5 * 1024 * 1024;
-      allow delete: if signedIn();
+      allow delete: if isChatMember(roomId);
     }
 
     match /{allPaths=**} {
