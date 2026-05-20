@@ -722,12 +722,14 @@ class _AuthGateState extends State<AuthGate> {
       if (kIsWeb) {
         return;
       }
-      // Windows and Linux have no native Google Sign-In SDK; skip init there.
-      if (defaultTargetPlatform == TargetPlatform.windows ||
+      // macOS, Windows and Linux: skip GIDSignIn init — these platforms use
+      // signInWithProvider instead of the native SDK.
+      if (defaultTargetPlatform == TargetPlatform.macOS ||
+          defaultTargetPlatform == TargetPlatform.windows ||
           defaultTargetPlatform == TargetPlatform.linux) {
         return;
       }
-      // iOS and macOS: initialise with the OAuth client ID from Firebase config.
+      // iOS: initialise with the OAuth client ID from Firebase config.
       final clientId = DefaultFirebaseOptions.currentPlatform.iosClientId;
       if (clientId != null && clientId.isNotEmpty) {
         await _googleSignIn.initialize(clientId: clientId);
@@ -751,18 +753,30 @@ Future<void> _signInWithGoogle() async {
         return;
       }
 
-      // Windows has no native Google Sign-In SDK; use Firebase's browser flow.
-      if (defaultTargetPlatform == TargetPlatform.windows) {
-        await _firebaseAuth.signInWithProvider(
-          GoogleAuthProvider()
-            ..addScope('email')
-            ..addScope('profile'),
-        );
-        _clearMessage();
-        return;
+      // Windows and macOS: no reliable native Google Sign-In SDK path.
+      // macOS: GIDSignIn requires keychain-access-groups, a restricted
+      // entitlement that blocks app launch on Developer ID builds without
+      // a provisioning profile. Fall back to signInWithProvider (browser).
+      if (defaultTargetPlatform == TargetPlatform.windows ||
+          defaultTargetPlatform == TargetPlatform.macOS) {
+        try {
+          await _firebaseAuth.signInWithProvider(
+            GoogleAuthProvider()
+              ..addScope('email')
+              ..addScope('profile'),
+          );
+          _clearMessage();
+          return;
+        } catch (_) {
+          _showMessage(
+            'Google Sign-In is not available on this device. '
+            'Please use email and password instead.',
+          );
+          return;
+        }
       }
 
-      // iOS, macOS, and Android: use the native GoogleSignIn SDK (GIDSignIn).
+      // iOS and Android: use the native GoogleSignIn SDK (GIDSignIn).
       final account = await _googleSignIn.authenticate();
       final googleAuth = account.authentication;
       final idToken = googleAuth.idToken;
