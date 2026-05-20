@@ -931,8 +931,32 @@ Future<void> _signInWithGoogle() async {
   String _friendlyAuthError(String? message) {
     if (message == null) return 'Authentication failed.';
     final lower = message.toLowerCase();
-    if (lower.contains('keychain') || lower.contains('nserror') || lower.contains('nslocalizedfailure')) {
+    // Platform / keychain errors (macOS/iOS)
+    if (lower.contains('keychain') ||
+        lower.contains('nserror') ||
+        lower.contains('nslocalizedfailure')) {
       return 'Sign-in failed. Please try again or use a different method.';
+    }
+    // Wrong email or password — Firebase unified this into one opaque message
+    // in newer SDK versions to prevent email enumeration.
+    if (lower.contains('malformed or has expired') ||
+        lower.contains('invalid-credential') ||
+        lower.contains('invalid credential') ||
+        lower.contains('password is invalid') ||
+        lower.contains('no user record')) {
+      return 'Incorrect email or password.';
+    }
+    if (lower.contains('email address is already in use')) {
+      return 'An account with this email already exists.';
+    }
+    if (lower.contains('badly formatted') || lower.contains('invalid email')) {
+      return 'Please enter a valid email address.';
+    }
+    if (lower.contains('too many requests') || lower.contains('unusual activity')) {
+      return 'Too many attempts. Please wait a moment and try again.';
+    }
+    if (lower.contains('network') || lower.contains('connection')) {
+      return 'Connection error. Please check your internet and try again.';
     }
     return message;
   }
