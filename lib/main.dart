@@ -717,13 +717,14 @@ class _AuthGateState extends State<AuthGate> {
       if (kIsWeb) {
         return;
       }
-      // Windows and Linux have no native Google Sign-In SDK; skip init there.
-      if (defaultTargetPlatform == TargetPlatform.windows ||
+      // macOS, Windows and Linux: skip GIDSignIn init — these platforms use
+      // Firebase's signInWithProvider instead of the google_sign_in SDK.
+      if (defaultTargetPlatform == TargetPlatform.macOS ||
+          defaultTargetPlatform == TargetPlatform.windows ||
           defaultTargetPlatform == TargetPlatform.linux) {
         return;
       }
-      // iOS and macOS: initialise with the OAuth client ID from Firebase config
-      // so the SDK uses the same client as Firebase Auth expects.
+      // iOS: initialise with the OAuth client ID from Firebase config.
       final clientId = DefaultFirebaseOptions.currentPlatform.iosClientId;
       if (clientId != null && clientId.isNotEmpty) {
         await _googleSignIn.initialize(clientId: clientId);
@@ -747,20 +748,22 @@ Future<void> _signInWithGoogle() async {
         return;
       }
 
-      // Windows has no native Google Sign-In SDK; use Firebase's browser flow.
-      if (defaultTargetPlatform == TargetPlatform.windows) {
-        final result = await _firebaseAuth.signInWithProvider(
+      // macOS and Windows: use Firebase's signInWithProvider.
+      // GIDSignIn is skipped on macOS because it requires keychain-access-groups
+      // which is a restricted entitlement that causes AMFI rejection on macOS 26
+      // without a provisioning profile.
+      if (defaultTargetPlatform == TargetPlatform.macOS ||
+          defaultTargetPlatform == TargetPlatform.windows) {
+        await _firebaseAuth.signInWithProvider(
           GoogleAuthProvider()
             ..addScope('email')
             ..addScope('profile'),
         );
-        if (result.user != null) {
-          _clearMessage();
-          return;
-        }
+        _clearMessage();
+        return;
       }
 
-      // iOS, macOS, Android: use the native GoogleSignIn SDK (GIDSignIn).
+      // iOS and Android: use the native GoogleSignIn SDK (GIDSignIn).
       final account = await _googleSignIn.authenticate();
       final googleAuth = account.authentication;
       final idToken = googleAuth.idToken;
@@ -776,7 +779,7 @@ Future<void> _signInWithGoogle() async {
     } on FirebaseAuthException catch (error) {
       _showMessage(_friendlyAuthError(error.message));
     } catch (error) {
-      _showMessage('Google sign-in error: $error');
+      _showMessage('Google sign-in failed. Please try again or use email/password.');
     } finally {
       if (mounted) {
         setState(() => _isSigningIn = false);
