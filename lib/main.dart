@@ -17,6 +17,7 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:cryptography/cryptography.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'dart:convert';
 
 import 'firebase_options.dart';
@@ -1698,6 +1699,18 @@ class _MainShellState extends State<MainShell>
   _notificationReadsStream;
   late final Stream<QuerySnapshot<Map<String, dynamic>>> _chatRoomsStream;
   int _tabSlideDirection = 1;
+
+  // ── Windows local notifications ────────────────────────────────────────────
+  FlutterLocalNotificationsPlugin? _localNotifs;
+  int _windowsNotifId = 0;
+  DateTime? _windowsNotifStartTime;
+  // Tracks the last-seen lastMessageAt per chat room to detect new messages.
+  final Map<String, Timestamp?> _lastSeenChatAt = {};
+  // Deduplicates notification and SOS document IDs we've already toasted.
+  final Set<String> _shownWindowsNotifIds = {};
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _windowsChatSub;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _windowsNotifSub;
+  StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _windowsSosSub;
   FirebaseFirestore get _firestore => FirebaseFirestore.instance;
   CollectionReference<Map<String, dynamic>> get _articlesRef =>
       _firestore.collection('articles');
@@ -1736,6 +1749,9 @@ class _MainShellState extends State<MainShell>
     _loadProfile();
     _initE2eeSetup();
     _initFcm();
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.windows) {
+      _initWindowsNotifications();
+    }
     if (kIsWeb && kWebAppCheckRecaptchaSiteKey.isEmpty) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) {
@@ -1756,6 +1772,9 @@ class _MainShellState extends State<MainShell>
 
   @override
   void dispose() {
+    _windowsChatSub?.cancel();
+    _windowsNotifSub?.cancel();
+    _windowsSosSub?.cancel();
     _pageController.dispose();
     _tabEntranceController.dispose();
     super.dispose();
@@ -2006,6 +2025,144 @@ class _MainShellState extends State<MainShell>
       });
     } catch (_) {
       // Non-critical — push notifications may not be available on this device.
+    }
+  }
+
+  // ── Windows local notification methods ───────────────────────────────────
+
+  Future<void> _initWindowsNotifications() async {
+    const settings = InitializationSettings(
+      windows: WindowsInitializationSettings(
+        appName: 'HelpHer',
+        appUserModelId: 'Com.HelpHer.App',
+        // Stable GUID — do not change; it identifies HelpHer in the OS.
+        guid: 'd49b0314-ee7a-4626-bf79-97cdb8a991bb',
+      ),
+    );
+    final plugin = FlutterLocalNotificationsPlugin();
+    await plugin.initialize(settings: settings);
+    _localNotifs = plugin;
+    _windowsNotifStartTime = DateTime.now();
+
+    // Reuse the existing broadcast streams; Firestore streams support multiple
+    // listeners so this doesn't create additional network connections.
+    _windowsChatSub = _chatRoomsStream.listen(_onWindowsChatRoomChange);
+    _windowsNotifSub = _notificationsStream.listen(_onWindowsNotifChange);
+    _windowsSosSub = _firestore
+        .collection('sosAlerts')
+        .orderBy('createdAt', descending: true)
+        .limit(20)
+        .snapshots()
+        .listen(_onWindowsSosChange);
+  }
+
+  void _showWindowsToast(String title, String body) {
+    _localNotifs?.show(
+      id: _windowsNotifId++,
+      title: title,
+      body: body,
+      notificationDetails:
+          const NotificationDetails(windows: WindowsNotificationDetails()),
+    );
+  }
+
+  void _onWindowsChatRoomChange(
+    QuerySnapshot<Map<String, dynamic>> snapshot,
+  ) {
+    final startTime = _windowsNotifStartTime;
+    if (startTime == null) return;
+
+    for (final change in snapshot.docChanges) {
+      if (change.type != DocumentChangeType.modified &&
+          change.type != DocumentChangeType.added) {
+        continue;
+      }
+
+      final data = change.doc.data() ?? {};
+      final lastMsgAt = data['lastMessageAt'] as Timestamp?;
+      final lastMsgBy = (data['lastMessageBy'] as String?)?.trim();
+      final roomId = change.doc.id;
+
+      // Cache the latest timestamp before any early returns.
+      final prevAt = _lastSeenChatAt[roomId];
+      _lastSeenChatAt[roomId] = lastMsgAt;
+
+      if (lastMsgBy == widget.currentUserUid) continue;
+      if (lastMsgAt == null) continue;
+      if (!lastMsgAt.toDate().isAfter(startTime)) continue;
+      if (prevAt != null && lastMsgAt.compareTo(prevAt) <= 0) continue;
+
+      final msg = (data['lastMessage'] as String?) ?? 'New message';
+      final roomName = data['name'] as String?;
+      _showWindowsToast('💬 ${roomName ?? 'New message'}', msg);
+    }
+  }
+
+  void _onWindowsNotifChange(
+    QuerySnapshot<Map<String, dynamic>> snapshot,
+  ) {
+    final startTime = _windowsNotifStartTime;
+    if (startTime == null) return;
+
+    for (final change in snapshot.docChanges) {
+      if (change.type != DocumentChangeType.added) continue;
+
+      final docId = change.doc.id;
+      if (_shownWindowsNotifIds.contains(docId)) continue;
+
+      final data = change.doc.data() ?? {};
+
+      // Don't toast for events the current user triggered.
+      final createdBy = (data['createdByUid'] as String?)?.trim();
+      if (createdBy == widget.currentUserUid) continue;
+
+      final ts = data['createdAt'] as Timestamp?;
+      if (ts == null || !ts.toDate().isAfter(startTime)) continue;
+
+      final type = data['type'] as String?;
+      final targetUid = (data['targetUid'] as String?)?.trim();
+
+      // Comments: only notify the post author.
+      if (type == 'comment' && targetUid != widget.currentUserUid) continue;
+
+      final title = (data['title'] as String?) ?? '';
+      final body = (data['body'] as String?) ?? '';
+      final icon = type == 'article'
+          ? '📖'
+          : type == 'comment'
+          ? '💬'
+          : '🔔';
+
+      _shownWindowsNotifIds.add(docId);
+      _showWindowsToast('$icon $title', body);
+    }
+  }
+
+  void _onWindowsSosChange(
+    QuerySnapshot<Map<String, dynamic>> snapshot,
+  ) {
+    final startTime = _windowsNotifStartTime;
+    if (startTime == null) return;
+
+    for (final change in snapshot.docChanges) {
+      if (change.type != DocumentChangeType.added) continue;
+
+      final docId = change.doc.id;
+      if (_shownWindowsNotifIds.contains(docId)) continue;
+
+      final data = change.doc.data() ?? {};
+      final senderUid = (data['senderUid'] as String?)?.trim();
+      if (senderUid == widget.currentUserUid) continue;
+
+      final ts = data['createdAt'] as Timestamp?;
+      if (ts == null || !ts.toDate().isAfter(startTime)) continue;
+
+      final senderName = (data['senderName'] as String?) ?? 'A HelpHer user';
+      _shownWindowsNotifIds.add(docId);
+      _showWindowsToast(
+        '🚨 SOS Alert',
+        '$senderName needs help! Open HelpHer immediately.',
+      );
     }
   }
 
