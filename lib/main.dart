@@ -717,14 +717,12 @@ class _AuthGateState extends State<AuthGate> {
       if (kIsWeb) {
         return;
       }
-      // macOS, Windows and Linux: skip GIDSignIn init — these platforms use
-      // Firebase's signInWithProvider instead of the google_sign_in SDK.
-      if (defaultTargetPlatform == TargetPlatform.macOS ||
-          defaultTargetPlatform == TargetPlatform.windows ||
+      // Windows and Linux have no native Google Sign-In SDK; skip init there.
+      if (defaultTargetPlatform == TargetPlatform.windows ||
           defaultTargetPlatform == TargetPlatform.linux) {
         return;
       }
-      // iOS: initialise with the OAuth client ID from Firebase config.
+      // iOS and macOS: initialise with the OAuth client ID from Firebase config.
       final clientId = DefaultFirebaseOptions.currentPlatform.iosClientId;
       if (clientId != null && clientId.isNotEmpty) {
         await _googleSignIn.initialize(clientId: clientId);
@@ -748,12 +746,8 @@ Future<void> _signInWithGoogle() async {
         return;
       }
 
-      // macOS and Windows: use Firebase's signInWithProvider.
-      // GIDSignIn is skipped on macOS because it requires keychain-access-groups
-      // which is a restricted entitlement that causes AMFI rejection on macOS 26
-      // without a provisioning profile.
-      if (defaultTargetPlatform == TargetPlatform.macOS ||
-          defaultTargetPlatform == TargetPlatform.windows) {
+      // Windows has no native Google Sign-In SDK; use Firebase's browser flow.
+      if (defaultTargetPlatform == TargetPlatform.windows) {
         await _firebaseAuth.signInWithProvider(
           GoogleAuthProvider()
             ..addScope('email')
@@ -763,7 +757,7 @@ Future<void> _signInWithGoogle() async {
         return;
       }
 
-      // iOS and Android: use the native GoogleSignIn SDK (GIDSignIn).
+      // iOS, macOS, and Android: use the native GoogleSignIn SDK (GIDSignIn).
       final account = await _googleSignIn.authenticate();
       final googleAuth = account.authentication;
       final idToken = googleAuth.idToken;
@@ -816,12 +810,18 @@ Future<void> _signInWithGoogle() async {
         final verified = _firebaseAuth.currentUser?.emailVerified ?? false;
         if (!verified) {
           await _firebaseAuth.currentUser?.sendEmailVerification();
+          _showMessage(
+            'Your email isn\'t verified yet — we just resent the link. '
+            'Check your inbox and click it, then sign in again.',
+          );
           return;
         }
       }
       _clearMessage();
     } on FirebaseAuthException catch (error) {
       _showMessage(_friendlyAuthError(error.message));
+    } catch (error) {
+      _showMessage('Sign in failed. Please check your connection and try again.');
     } finally {
       if (mounted) {
         setState(() => _isSigningIn = false);
