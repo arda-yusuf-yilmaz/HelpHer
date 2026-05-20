@@ -3457,12 +3457,13 @@ class _EmergencyScreenState extends State<EmergencyScreen> {
   /// broadcast a push notification to all subscribed users.
   void _writeSosAlert(String? locationLink) {
     Future(() async {
-      await FirebaseFirestore.instance.collection('sosAlerts').add({
+      final payload = <String, dynamic>{
         'senderUid': widget.currentUserUid,
         'senderName': widget.profile.name,
-        if (locationLink != null) 'locationLink': locationLink,
         'createdAt': FieldValue.serverTimestamp(),
-      });
+      };
+      if (locationLink != null) payload['locationLink'] = locationLink;
+      await FirebaseFirestore.instance.collection('sosAlerts').add(payload);
     }).catchError((_) {
       // Non-critical: push alert may not reach users, but SMS is still sent.
     });
