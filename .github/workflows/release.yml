@@ -145,6 +145,23 @@ jobs:
           PP_PATH="$RUNNER_TEMP/build.provisionprofile"
           echo "$MACOS_PROVISIONING_PROFILE" | base64 --decode > "$PP_PATH"
           PP_UUID=$(security cms -D -i "$PP_PATH" | plutil -extract UUID raw -o - -)
+
+          # ── Diagnostic: confirm this profile includes Push Notifications ──
+          echo "▶ Provisioning profile UUID: $PP_UUID"
+          echo "▶ Profile entitlements / capabilities:"
+          security cms -D -i "$PP_PATH" \
+            | plutil -extract Entitlements xml1 -o - - \
+            || true
+          if security cms -D -i "$PP_PATH" | grep -q "aps-environment"; then
+            echo "✓ Profile contains aps-environment — Push Notifications OK"
+          else
+            echo "✗ WARNING: Profile does NOT contain aps-environment."
+            echo "  Regenerate the Developer ID profile with Push Notifications"
+            echo "  enabled, re-encode with base64, and update MACOS_PROVISIONING_PROFILE."
+            exit 1
+          fi
+          # ─────────────────────────────────────────────────────────────────
+
           mkdir -p ~/Library/MobileDevice/Provisioning\ Profiles
           cp "$PP_PATH" ~/Library/MobileDevice/Provisioning\ Profiles/"$PP_UUID".provisionprofile
           # Embed in the app bundle (required for restricted entitlements)

@@ -12,9 +12,7 @@
 	<array>
 		<string>$(AppIdentifierPrefix)$(CFBundleIdentifier)</string>
 	</array>
-	<!-- aps-environment removed: Developer ID provisioning profiles do not
-	     reliably authorize this entitlement via AMFI on macOS. macOS push
-	     notifications will be revisited once the correct profile type is
-	     confirmed. iOS/Android push continue to work unaffected. -->
+	<key>aps-environment</key>
+	<string>production</string>
 </dict>
 </plist>
