@@ -1983,6 +1983,41 @@ class _MainShellState extends State<MainShell>
         badge: true,
         sound: true,
       );
+
+      // Android 8+ requires a notification channel to exist before the OS
+      // can display any notification. Create it here so background / terminated
+      // messages from FCM are guaranteed to have a valid channel to land on.
+      if (defaultTargetPlatform == TargetPlatform.android) {
+        const channel = AndroidNotificationChannel(
+          'default_channel',
+          'General Notifications',
+          description:
+              'Notifications for chat messages, comments, and SOS alerts',
+          importance: Importance.high,
+          showBadge: true,
+        );
+        final plugin = FlutterLocalNotificationsPlugin();
+        await plugin
+            .resolvePlatformSpecificImplementation<
+                AndroidFlutterLocalNotificationsPlugin>()
+            ?.createNotificationChannel(channel);
+        // Initialise the plugin for Android so it can be used to display
+        // foreground notifications as proper heads-up alerts.
+        const androidSettings =
+            AndroidInitializationSettings('@mipmap/ic_launcher');
+        await plugin.initialize(
+          settings: const InitializationSettings(android: androidSettings),
+        );
+        // Tell FCM to use our channel for high-priority messages so they
+        // appear as heads-up notifications even when the app is foregrounded.
+        await FirebaseMessaging.instance
+            .setForegroundNotificationPresentationOptions(
+          alert: true,
+          badge: true,
+          sound: true,
+        );
+      }
+
       final token = await messaging.getToken();
       if (token != null && token.isNotEmpty) {
         await _firestore
