@@ -1118,8 +1118,8 @@ Future<void> _signInWithGoogle() async {
                   const SizedBox(height: 8),
                   Text(
                     isCreateAccount
-                        ? 'Create a Firebase account or continue with Google.'
-                        : 'Sign in with Firebase email/password or Google.',
+                        ? 'Create an account or continue with Google.'
+                        : 'Sign in with email/password or Google.',
                     textAlign: TextAlign.center,
                     style: const TextStyle(color: AppColors.text2),
                   ),
