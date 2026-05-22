@@ -14,6 +14,9 @@ class ChatRoomScreen extends StatefulWidget {
   final String currentUserName;
   final String roomType;
   final List<String> roomMembers;
+  /// When true the widget is embedded in a desktop master-detail layout
+  /// and should not render its own Scaffold / AppBar.
+  final bool isEmbedded;
 
   const ChatRoomScreen({
     super.key,
@@ -23,6 +26,7 @@ class ChatRoomScreen extends StatefulWidget {
     required this.currentUserName,
     this.roomType = 'group',
     this.roomMembers = const [],
+    this.isEmbedded = false,
   });
 
   @override
@@ -256,73 +260,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
             }
           });
         }
-        return Scaffold(
-          appBar: AppBar(
-            title: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(widget.roomName),
-                if (_e2eeReady) ...[
-                  const SizedBox(width: 6),
-                  const Tooltip(
-                    message: 'End-to-end encrypted',
-                    child: Icon(Icons.lock, size: 16, color: Colors.white70),
-                  ),
-                ],
-              ],
-            ),
-            actions: [
-              if (roomType == 'group') ...[
-                IconButton(
-                  tooltip: 'Add member',
-                  onPressed: _addMemberDialog,
-                  icon: const Icon(Icons.person_add_alt_1),
-                ),
-                IconButton(
-                  tooltip: 'Leave group',
-                  icon: const Icon(Icons.exit_to_app),
-                  onPressed: () async {
-                    final confirmed =
-                        await showDialog<bool>(
-                          context: context,
-                          builder: (context) => AlertDialog(
-                            title: const Text('Leave group?'),
-                            content: Text(
-                              'You will leave "${widget.roomName}" and it will be removed from your list.',
-                            ),
-                            actions: [
-                              TextButton(
-                                onPressed: () =>
-                                    Navigator.of(context).pop(false),
-                                child: const Text('Cancel'),
-                              ),
-                              ElevatedButton(
-                                onPressed: () =>
-                                    Navigator.of(context).pop(true),
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppColors.brand,
-                                  foregroundColor: Colors.white,
-                                ),
-                                child: const Text('Leave'),
-                              ),
-                            ],
-                          ),
-                        ) ??
-                        false;
-                    if (!confirmed) return;
-                    await _roomRef.set({
-                      'members': FieldValue.arrayRemove([
-                        widget.currentUserUid,
-                      ]),
-                      'updatedAt': FieldValue.serverTimestamp(),
-                    }, SetOptions(merge: true));
-                    if (context.mounted) Navigator.of(context).pop();
-                  },
-                ),
-              ],
-            ],
-          ),
-          body: Column(
+        final bodyColumn = Column(
             children: [
               if (roomType == 'group')
                 SizedBox(
@@ -537,7 +475,127 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                 ),
               ),
             ],
+          );
+        if (widget.isEmbedded) {
+          return Column(
+            children: [
+              // Embedded header replaces AppBar
+              Container(
+                height: 56,
+                decoration: const BoxDecoration(
+                  border: Border(
+                    bottom: BorderSide(color: Colors.black12),
+                  ),
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            widget.roomName,
+                            style: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          if (_e2eeReady) ...[
+                            const SizedBox(width: 6),
+                            const Tooltip(
+                              message: 'End-to-end encrypted',
+                              child: Icon(
+                                Icons.lock,
+                                size: 14,
+                                color: AppColors.text2,
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                    if (roomType == 'group') ...[
+                      IconButton(
+                        tooltip: 'Add member',
+                        onPressed: _addMemberDialog,
+                        icon: const Icon(Icons.person_add_alt_1),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              Expanded(child: bodyColumn),
+            ],
+          );
+        }
+        return Scaffold(
+          appBar: AppBar(
+            title: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(widget.roomName),
+                if (_e2eeReady) ...[
+                  const SizedBox(width: 6),
+                  const Tooltip(
+                    message: 'End-to-end encrypted',
+                    child: Icon(Icons.lock, size: 16, color: Colors.white70),
+                  ),
+                ],
+              ],
+            ),
+            actions: [
+              if (roomType == 'group') ...[
+                IconButton(
+                  tooltip: 'Add member',
+                  onPressed: _addMemberDialog,
+                  icon: const Icon(Icons.person_add_alt_1),
+                ),
+                IconButton(
+                  tooltip: 'Leave group',
+                  icon: const Icon(Icons.exit_to_app),
+                  onPressed: () async {
+                    final confirmed =
+                        await showDialog<bool>(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            title: const Text('Leave group?'),
+                            content: Text(
+                              'You will leave "${widget.roomName}" and it will be removed from your list.',
+                            ),
+                            actions: [
+                              TextButton(
+                                onPressed: () =>
+                                    Navigator.of(context).pop(false),
+                                child: const Text('Cancel'),
+                              ),
+                              ElevatedButton(
+                                onPressed: () =>
+                                    Navigator.of(context).pop(true),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: AppColors.brand,
+                                  foregroundColor: Colors.white,
+                                ),
+                                child: const Text('Leave'),
+                              ),
+                            ],
+                          ),
+                        ) ??
+                        false;
+                    if (!confirmed) return;
+                    await _roomRef.set({
+                      'members': FieldValue.arrayRemove([
+                        widget.currentUserUid,
+                      ]),
+                      'updatedAt': FieldValue.serverTimestamp(),
+                    }, SetOptions(merge: true));
+                    if (context.mounted) Navigator.of(context).pop();
+                  },
+                ),
+              ],
+            ],
           ),
+          body: bodyColumn,
         );
       },
     );

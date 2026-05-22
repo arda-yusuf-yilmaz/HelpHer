@@ -29,6 +29,12 @@ class _ChatsScreenState extends State<ChatsScreen> {
   CollectionReference<Map<String, dynamic>> get _roomsCollection =>
       _firestore.collection('chatRooms');
 
+  // Desktop master-detail state
+  String? _selectedRoomId;
+  String _selectedRoomName = '';
+  String _selectedRoomType = 'group';
+  List<String> _selectedRoomMembers = const [];
+
   Widget _chatAvatar(String? photoUrl, bool isDirect) {
     if (photoUrl != null && photoUrl.isNotEmpty) {
       return CircleAvatar(
@@ -263,104 +269,127 @@ class _ChatsScreenState extends State<ChatsScreen> {
   Future<void> _openCreateGroupSheet() async {
     final nameController = TextEditingController();
     final membersController = TextEditingController();
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (context) {
-        return Padding(
+    final isComputer = isComputerPlatform(Theme.of(context).platform);
+
+    Future<void> createGroup(BuildContext ctx) async {
+      final name = nameController.text.trim();
+      if (name.isEmpty) {
+        _showChatSnack('Enter a group name.');
+        return;
+      }
+      final parsed = membersController.text
+          .split(',')
+          .map((v) => v.trim())
+          .where((v) => v.isNotEmpty)
+          .toList();
+      final resolvedOthers = await _resolveMemberIds(parsed);
+      if (resolvedOthers == null) return;
+      final members = <String>{
+        widget.currentUserUid,
+        ...resolvedOthers,
+      }.toList();
+      if (members.length < 2) {
+        _showChatSnack('Add at least one other member by username.');
+        return;
+      }
+      try {
+        final roomRef = await _roomsCollection.add({
+          'type': 'group',
+          'name': name,
+          'members': members,
+          'createdBy': widget.currentUserUid,
+          'createdAt': FieldValue.serverTimestamp(),
+          'updatedAt': FieldValue.serverTimestamp(),
+          'lastMessage': '',
+          'lastMessageAt': FieldValue.serverTimestamp(),
+          'lastMessageBy': '',
+          'lastReadBy': {widget.currentUserUid: Timestamp.now()},
+        });
+        if (!ctx.mounted) return;
+        Navigator.of(ctx).pop();
+        _openRoom(roomRef.id, name, type: 'group', members: members);
+      } on FirebaseException catch (e) {
+        _showChatSnack(e.message ?? 'Could not create group (${e.code}).');
+      } catch (e) {
+        _showChatSnack('Could not create group: $e');
+      }
+    }
+
+    Widget formFields() => Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: nameController,
+              decoration: const InputDecoration(
+                labelText: 'Group name',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: membersController,
+              minLines: 2,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                labelText: 'Member usernames (comma separated)',
+                hintText: 'river_song, clara_o',
+                border: OutlineInputBorder(),
+              ),
+            ),
+          ],
+        );
+
+    if (isComputer) {
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Create group chat'),
+          content: SizedBox(width: 420, child: formFields()),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel'),
+            ),
+            ElevatedButton(
+              onPressed: () => createGroup(ctx),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.brand,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Create group'),
+            ),
+          ],
+        ),
+      );
+    } else {
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        showDragHandle: true,
+        builder: (ctx) => Padding(
           padding: EdgeInsets.fromLTRB(
             16,
             8,
             16,
-            MediaQuery.of(context).viewInsets.bottom + 16,
+            MediaQuery.of(ctx).viewInsets.bottom + 16,
           ),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
               const Text(
                 'Create group chat',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
-              ),
-              const SizedBox(height: 10),
-              TextField(
-                controller: nameController,
-                decoration: const InputDecoration(
-                  labelText: 'Group name',
-                  border: OutlineInputBorder(),
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
               const SizedBox(height: 10),
-              TextField(
-                controller: membersController,
-                minLines: 2,
-                maxLines: 3,
-                decoration: const InputDecoration(
-                  labelText: 'Member usernames (comma separated)',
-                  hintText: 'river_song, clara_o',
-                  border: OutlineInputBorder(),
-                ),
-              ),
+              formFields(),
               const SizedBox(height: 12),
               SizedBox(
                 width: double.infinity,
                 child: ElevatedButton(
-                  onPressed: () async {
-                    final name = nameController.text.trim();
-                    if (name.isEmpty) {
-                      _showChatSnack('Enter a group name.');
-                      return;
-                    }
-                    final parsed = membersController.text
-                        .split(',')
-                        .map((value) => value.trim())
-                        .where((value) => value.isNotEmpty)
-                        .toList();
-                    final resolvedOthers = await _resolveMemberIds(parsed);
-                    if (resolvedOthers == null) {
-                      return;
-                    }
-                    final members = <String>{
-                      widget.currentUserUid,
-                      ...resolvedOthers,
-                    }.toList();
-                    if (members.length < 2) {
-                      _showChatSnack(
-                        'Add at least one other member by username.',
-                      );
-                      return;
-                    }
-                    try {
-                      final roomRef = await _roomsCollection.add({
-                        'type': 'group',
-                        'name': name,
-                        'members': members,
-                        'createdBy': widget.currentUserUid,
-                        'createdAt': FieldValue.serverTimestamp(),
-                        'updatedAt': FieldValue.serverTimestamp(),
-                        'lastMessage': '',
-                        'lastMessageAt': FieldValue.serverTimestamp(),
-                        'lastMessageBy': '',
-                        'lastReadBy': {widget.currentUserUid: Timestamp.now()},
-                      });
-                      if (!context.mounted) {
-                        return;
-                      }
-                      Navigator.of(context).pop();
-                      _openRoom(
-                        roomRef.id,
-                        name,
-                        type: 'group',
-                        members: members,
-                      );
-                    } on FirebaseException catch (e) {
-                      _showChatSnack(
-                        e.message ?? 'Could not create group (${e.code}).',
-                      );
-                    } catch (e) {
-                      _showChatSnack('Could not create group: $e');
-                    }
-                  },
+                  onPressed: () => createGroup(ctx),
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.brand,
                     foregroundColor: Colors.white,
@@ -370,9 +399,9 @@ class _ChatsScreenState extends State<ChatsScreen> {
               ),
             ],
           ),
-        );
-      },
-    );
+        ),
+      );
+    }
     nameController.dispose();
     membersController.dispose();
   }
@@ -405,275 +434,354 @@ class _ChatsScreenState extends State<ChatsScreen> {
     String type = 'group',
     List<String> members = const [],
   }) {
-    Navigator.of(context).push(
-      buildSlideRoute<void>(
-        page: ChatRoomScreen(
-          roomId: roomId,
-          roomName: roomName,
-          currentUserUid: widget.currentUserUid,
-          currentUserName: widget.currentUserName,
-          roomType: type,
-          roomMembers: members,
+    if (isComputerPlatform(Theme.of(context).platform)) {
+      setState(() {
+        _selectedRoomId = roomId;
+        _selectedRoomName = roomName;
+        _selectedRoomType = type;
+        _selectedRoomMembers = members;
+      });
+    } else {
+      Navigator.of(context).push(
+        buildSlideRoute<void>(
+          page: ChatRoomScreen(
+            roomId: roomId,
+            roomName: roomName,
+            currentUserUid: widget.currentUserUid,
+            currentUserName: widget.currentUserName,
+            roomType: type,
+            roomMembers: members,
+          ),
         ),
-      ),
+      );
+    }
+  }
+
+  Widget _buildChatList() {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+          child: Row(
+            children: [
+              const Expanded(
+                child: Text(
+                  'Chats',
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+              ),
+              IconButton(
+                tooltip: 'Private chat',
+                onPressed: _openCreateDirectDialog,
+                icon: const Icon(Icons.person_add_alt_1_outlined),
+              ),
+              IconButton(
+                tooltip: 'Create group',
+                onPressed: _openCreateGroupSheet,
+                icon: const Icon(Icons.group_add_outlined),
+              ),
+            ],
+          ),
+        ),
+        Expanded(
+          child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+            stream: _roomsCollection
+                .where('members', arrayContains: widget.currentUserUid)
+                .snapshots(),
+            builder: (context, snapshot) {
+              if (!snapshot.hasData) {
+                return const Center(child: CircularProgressIndicator());
+              }
+              final myUid = widget.currentUserUid;
+              final rooms = snapshot.data!.docs.toList()
+                ..sort((a, b) {
+                  final aAt = a.data()['lastMessageAt'];
+                  final bAt = b.data()['lastMessageAt'];
+                  final aTime = aAt is Timestamp
+                      ? aAt.toDate()
+                      : DateTime.fromMillisecondsSinceEpoch(0);
+                  final bTime = bAt is Timestamp
+                      ? bAt.toDate()
+                      : DateTime.fromMillisecondsSinceEpoch(0);
+                  return bTime.compareTo(aTime);
+                });
+              if (rooms.isEmpty) {
+                return const Center(
+                  child: Text(
+                    'No chats yet. Start a private or group chat.',
+                    style: TextStyle(color: AppColors.text2),
+                  ),
+                );
+              }
+              return ListView.builder(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                itemCount: rooms.length,
+                itemBuilder: (context, index) {
+                  final roomDoc = rooms[index];
+                  final data = roomDoc.data();
+                  final roomName =
+                      (data['name'] as String?)?.trim().isNotEmpty == true
+                      ? (data['name'] as String).trim()
+                      : 'Chat';
+                  final lastMessage =
+                      (data['lastMessage'] as String?)?.trim() ?? '';
+                  final type = (data['type'] as String?) ?? 'group';
+                  final roomMembers =
+                      (data['members'] as List?) ?? const [];
+                  final groupPhotoUrl = data['photoUrl'] as String?;
+                  final lastBy =
+                      (data['lastMessageBy'] as String?) ?? '';
+                  final lastAtRaw = data['lastMessageAt'];
+                  final lastAt =
+                      lastAtRaw is Timestamp ? lastAtRaw : null;
+                  final readBy = data['lastReadBy'];
+                  Timestamp? myReadAt;
+                  if (readBy is Map<String, dynamic>) {
+                    final value = readBy[myUid];
+                    if (value is Timestamp) {
+                      myReadAt = value;
+                    }
+                  }
+                  final hasUnread =
+                      lastAt != null &&
+                      lastBy.isNotEmpty &&
+                      lastBy != myUid &&
+                      (myReadAt == null ||
+                          lastAt.toDate().isAfter(myReadAt.toDate()));
+                  final isSelected = _selectedRoomId == roomDoc.id;
+                  Widget buildCard(Widget avatar) => Card(
+                    color: isSelected
+                        ? AppColors.brandLight
+                        : null,
+                    child: ListTile(
+                      leading: avatar,
+                      title: Text(roomName),
+                      subtitle: Text(
+                        lastMessage.isEmpty
+                            ? '${roomMembers.length} members'
+                            : lastMessage,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      trailing: hasUnread
+                          ? Container(
+                              width: 10,
+                              height: 10,
+                              decoration: const BoxDecoration(
+                                color: AppColors.brand,
+                                shape: BoxShape.circle,
+                              ),
+                            )
+                          : null,
+                      onTap: () => _openRoom(
+                        roomDoc.id,
+                        roomName,
+                        type: type,
+                        members:
+                            roomMembers.whereType<String>().toList(),
+                      ),
+                    ),
+                  );
+                  if (type == 'direct') {
+                    final otherUid = roomMembers
+                        .whereType<String>()
+                        .firstWhere(
+                          (m) => m != myUid,
+                          orElse: () => '',
+                        );
+                    return StreamBuilder<
+                      DocumentSnapshot<Map<String, dynamic>>
+                    >(
+                      stream: otherUid.isNotEmpty
+                          ? _firestore
+                                .collection('userDirectory')
+                                .doc(otherUid)
+                                .snapshots()
+                          : const Stream.empty(),
+                      builder: (ctx, dirSnap) {
+                        final photoUrl =
+                            dirSnap.data?.data()?['photoUrl']
+                                as String?;
+                        return Dismissible(
+                          key: Key(roomDoc.id),
+                          direction: DismissDirection.endToStart,
+                          background: Container(
+                            alignment: Alignment.centerRight,
+                            padding: const EdgeInsets.only(right: 20),
+                            decoration: BoxDecoration(
+                              color: AppColors.brand,
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: const Icon(
+                              Icons.delete_outline,
+                              color: Colors.white,
+                            ),
+                          ),
+                          confirmDismiss: (_) async {
+                            return await showDialog<bool>(
+                                  context: context,
+                                  builder: (context) => AlertDialog(
+                                    title: const Text('Delete chat?'),
+                                    content: const Text(
+                                      'This chat will be removed from your list.',
+                                    ),
+                                    actions: [
+                                      TextButton(
+                                        onPressed: () =>
+                                            Navigator.of(context)
+                                                .pop(false),
+                                        child: const Text('Cancel'),
+                                      ),
+                                      ElevatedButton(
+                                        onPressed: () =>
+                                            Navigator.of(context)
+                                                .pop(true),
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor:
+                                              AppColors.brand,
+                                          foregroundColor: Colors.white,
+                                        ),
+                                        child: const Text('Delete'),
+                                      ),
+                                    ],
+                                  ),
+                                ) ??
+                                false;
+                          },
+                          onDismissed: (_) =>
+                              _deleteDirectChat(roomDoc.id),
+                          child: buildCard(_chatAvatar(photoUrl, true)),
+                        );
+                      },
+                    );
+                  }
+                  return PopupMenuButton<String>(
+                    onSelected: (value) async {
+                      if (value == 'photo') {
+                        await _changeGroupPhoto(context, roomDoc.id);
+                      } else if (value == 'leave') {
+                        final confirmed =
+                            await showDialog<bool>(
+                              context: context,
+                              builder: (context) => AlertDialog(
+                                title: const Text('Leave group?'),
+                                content: Text(
+                                  'You will leave "$roomName" and it will be removed from your list.',
+                                ),
+                                actions: [
+                                  TextButton(
+                                    onPressed: () =>
+                                        Navigator.of(context).pop(false),
+                                    child: const Text('Cancel'),
+                                  ),
+                                  ElevatedButton(
+                                    onPressed: () =>
+                                        Navigator.of(context).pop(true),
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: AppColors.brand,
+                                      foregroundColor: Colors.white,
+                                    ),
+                                    child: const Text('Leave'),
+                                  ),
+                                ],
+                              ),
+                            ) ??
+                            false;
+                        if (confirmed) await _leaveGroup(roomDoc.id);
+                      }
+                    },
+                    itemBuilder: (_) => const [
+                      PopupMenuItem(
+                        value: 'photo',
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.photo_camera,
+                              color: AppColors.brand,
+                              size: 18,
+                            ),
+                            SizedBox(width: 8),
+                            Text('Change photo'),
+                          ],
+                        ),
+                      ),
+                      PopupMenuItem(
+                        value: 'leave',
+                        child: Row(
+                          children: [
+                            Icon(
+                              Icons.exit_to_app,
+                              color: AppColors.brand,
+                              size: 18,
+                            ),
+                            SizedBox(width: 8),
+                            Text('Leave group'),
+                          ],
+                        ),
+                      ),
+                    ],
+                    child: buildCard(_chatAvatar(groupPhotoUrl, false)),
+                  );
+                },
+              );
+            },
+          ),
+        ),
+      ],
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      child: Column(
-        children: [
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: Row(
-              children: [
-                const Expanded(
-                  child: Text(
-                    'Chats',
-                    style: TextStyle(fontSize: 28, fontWeight: FontWeight.w700),
-                  ),
-                ),
-                IconButton(
-                  tooltip: 'Private chat',
-                  onPressed: _openCreateDirectDialog,
-                  icon: const Icon(Icons.person_add_alt_1_outlined),
-                ),
-                IconButton(
-                  tooltip: 'Create group',
-                  onPressed: _openCreateGroupSheet,
-                  icon: const Icon(Icons.group_add_outlined),
-                ),
-              ],
+    final isComputer = isComputerPlatform(Theme.of(context).platform);
+    if (isComputer) {
+      return SafeArea(
+        child: Row(
+          children: [
+            // Left panel — chat list (300px)
+            SizedBox(
+              width: 300,
+              child: _buildChatList(),
             ),
-          ),
-          Expanded(
-            child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-              stream: _roomsCollection
-                  .where('members', arrayContains: widget.currentUserUid)
-                  .snapshots(),
-              builder: (context, snapshot) {
-                if (!snapshot.hasData) {
-                  return const Center(child: CircularProgressIndicator());
-                }
-                final myUid = widget.currentUserUid;
-                final rooms = snapshot.data!.docs.toList()
-                  ..sort((a, b) {
-                    final aAt = a.data()['lastMessageAt'];
-                    final bAt = b.data()['lastMessageAt'];
-                    final aTime = aAt is Timestamp
-                        ? aAt.toDate()
-                        : DateTime.fromMillisecondsSinceEpoch(0);
-                    final bTime = bAt is Timestamp
-                        ? bAt.toDate()
-                        : DateTime.fromMillisecondsSinceEpoch(0);
-                    return bTime.compareTo(aTime);
-                  });
-                if (rooms.isEmpty) {
-                  return const Center(
-                    child: Text(
-                      'No chats yet. Start a private or group chat.',
-                      style: TextStyle(color: AppColors.text2),
-                    ),
-                  );
-                }
-                return ListView.builder(
-                  padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
-                  itemCount: rooms.length,
-                  itemBuilder: (context, index) {
-                    final roomDoc = rooms[index];
-                    final data = roomDoc.data();
-                    final roomName =
-                        (data['name'] as String?)?.trim().isNotEmpty == true
-                        ? (data['name'] as String).trim()
-                        : 'Chat';
-                    final lastMessage =
-                        (data['lastMessage'] as String?)?.trim() ?? '';
-                    final type = (data['type'] as String?) ?? 'group';
-                    final roomMembers = (data['members'] as List?) ?? const [];
-                    final groupPhotoUrl = data['photoUrl'] as String?;
-                    final lastBy = (data['lastMessageBy'] as String?) ?? '';
-                    final lastAtRaw = data['lastMessageAt'];
-                    final lastAt = lastAtRaw is Timestamp ? lastAtRaw : null;
-                    final readBy = data['lastReadBy'];
-                    Timestamp? myReadAt;
-                    if (readBy is Map<String, dynamic>) {
-                      final value = readBy[myUid];
-                      if (value is Timestamp) {
-                        myReadAt = value;
-                      }
-                    }
-                    final hasUnread =
-                        lastAt != null &&
-                        lastBy.isNotEmpty &&
-                        lastBy != myUid &&
-                        (myReadAt == null ||
-                            lastAt.toDate().isAfter(myReadAt.toDate()));
-                    Widget buildCard(Widget avatar) => Card(
-                      child: ListTile(
-                        leading: avatar,
-                        title: Text(roomName),
-                        subtitle: Text(
-                          lastMessage.isEmpty
-                              ? '${roomMembers.length} members'
-                              : lastMessage,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        trailing: hasUnread
-                            ? Container(
-                                width: 10,
-                                height: 10,
-                                decoration: const BoxDecoration(
-                                  color: AppColors.brand,
-                                  shape: BoxShape.circle,
-                                ),
-                              )
-                            : null,
-                        onTap: () => _openRoom(
-                          roomDoc.id,
-                          roomName,
-                          type: type,
-                          members: roomMembers.whereType<String>().toList(),
-                        ),
+            const VerticalDivider(width: 1),
+            // Right panel — selected room or placeholder
+            Expanded(
+              child: _selectedRoomId != null
+                  ? ChatRoomScreen(
+                      key: ValueKey(_selectedRoomId),
+                      roomId: _selectedRoomId!,
+                      roomName: _selectedRoomName,
+                      currentUserUid: widget.currentUserUid,
+                      currentUserName: widget.currentUserName,
+                      roomType: _selectedRoomType,
+                      roomMembers: _selectedRoomMembers,
+                      isEmbedded: true,
+                    )
+                  : Center(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(
+                            Icons.chat_bubble_outline,
+                            size: 64,
+                            color: AppColors.brandLight,
+                          ),
+                          const SizedBox(height: 16),
+                          const Text(
+                            'Select a conversation',
+                            style: TextStyle(color: AppColors.text2),
+                          ),
+                        ],
                       ),
-                    );
-                    if (type == 'direct') {
-                      final otherUid = roomMembers
-                          .whereType<String>()
-                          .firstWhere((m) => m != myUid, orElse: () => '');
-                      return StreamBuilder<DocumentSnapshot<Map<String, dynamic>>>(
-                        stream: otherUid.isNotEmpty
-                            ? _firestore
-                                .collection('userDirectory')
-                                .doc(otherUid)
-                                .snapshots()
-                            : const Stream.empty(),
-                        builder: (ctx, dirSnap) {
-                          final photoUrl = dirSnap.data?.data()?['photoUrl'] as String?;
-                          return Dismissible(
-                        key: Key(roomDoc.id),
-                        direction: DismissDirection.endToStart,
-                        background: Container(
-                          alignment: Alignment.centerRight,
-                          padding: const EdgeInsets.only(right: 20),
-                          decoration: BoxDecoration(
-                            color: AppColors.brand,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                          child: const Icon(
-                            Icons.delete_outline,
-                            color: Colors.white,
-                          ),
-                        ),
-                        confirmDismiss: (_) async {
-                          return await showDialog<bool>(
-                                context: context,
-                                builder: (context) => AlertDialog(
-                                  title: const Text('Delete chat?'),
-                                  content: const Text(
-                                    'This chat will be removed from your list.',
-                                  ),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () =>
-                                          Navigator.of(context).pop(false),
-                                      child: const Text('Cancel'),
-                                    ),
-                                    ElevatedButton(
-                                      onPressed: () =>
-                                          Navigator.of(context).pop(true),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: AppColors.brand,
-                                        foregroundColor: Colors.white,
-                                      ),
-                                      child: const Text('Delete'),
-                                    ),
-                                  ],
-                                ),
-                              ) ??
-                              false;
-                        },
-                        onDismissed: (_) => _deleteDirectChat(roomDoc.id),
-                        child: buildCard(_chatAvatar(photoUrl, true)),
-                      );
-                        },
-                      );
-                    }
-                    return PopupMenuButton<String>(
-                      onSelected: (value) async {
-                        if (value == 'photo') {
-                          await _changeGroupPhoto(context, roomDoc.id);
-                        } else if (value == 'leave') {
-                          final confirmed =
-                              await showDialog<bool>(
-                                context: context,
-                                builder: (context) => AlertDialog(
-                                  title: const Text('Leave group?'),
-                                  content: Text(
-                                    'You will leave "$roomName" and it will be removed from your list.',
-                                  ),
-                                  actions: [
-                                    TextButton(
-                                      onPressed: () =>
-                                          Navigator.of(context).pop(false),
-                                      child: const Text('Cancel'),
-                                    ),
-                                    ElevatedButton(
-                                      onPressed: () =>
-                                          Navigator.of(context).pop(true),
-                                      style: ElevatedButton.styleFrom(
-                                        backgroundColor: AppColors.brand,
-                                        foregroundColor: Colors.white,
-                                      ),
-                                      child: const Text('Leave'),
-                                    ),
-                                  ],
-                                ),
-                              ) ??
-                              false;
-                          if (confirmed) await _leaveGroup(roomDoc.id);
-                        }
-                      },
-                      itemBuilder: (_) => const [
-                        PopupMenuItem(
-                          value: 'photo',
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.photo_camera,
-                                color: AppColors.brand,
-                                size: 18,
-                              ),
-                              SizedBox(width: 8),
-                              Text('Change photo'),
-                            ],
-                          ),
-                        ),
-                        PopupMenuItem(
-                          value: 'leave',
-                          child: Row(
-                            children: [
-                              Icon(
-                                Icons.exit_to_app,
-                                color: AppColors.brand,
-                                size: 18,
-                              ),
-                              SizedBox(width: 8),
-                              Text('Leave group'),
-                            ],
-                          ),
-                        ),
-                      ],
-                      child: buildCard(_chatAvatar(groupPhotoUrl, false)),
-                    );
-                  },
-                );
-              },
+                    ),
             ),
-          ),
-        ],
-      ),
-    );
+          ],
+        ),
+      );
+    }
+    return SafeArea(child: _buildChatList());
   }
 }

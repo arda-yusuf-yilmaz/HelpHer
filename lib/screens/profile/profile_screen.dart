@@ -434,10 +434,17 @@ class _ProfileScreenState extends State<ProfileScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isComputer = isComputerPlatform(Theme.of(context).platform);
     return SafeArea(
-      child: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
+      child: Align(
+        alignment: Alignment.topCenter,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(
+            maxWidth: isComputer ? 680 : double.infinity,
+          ),
+          child: ListView(
+            padding: const EdgeInsets.all(16),
+            children: [
           const Text(
             'Profile',
             style: TextStyle(fontSize: 28, fontWeight: FontWeight.w700),
@@ -785,6 +792,8 @@ class _ProfileScreenState extends State<ProfileScreen> {
             label: const Text('Add emergency contact'),
           ),
         ],
+      ),
+        ),
       ),
     );
   }

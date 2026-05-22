@@ -94,110 +94,138 @@ class _CommunityScreenState extends State<CommunityScreen>
     final controller = TextEditingController();
     String selectedTag = 'Support';
     const tags = ['Support', 'Wellbeing', 'Question', 'Update'];
+    final isComputer = isComputerPlatform(Theme.of(context).platform);
 
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            return Padding(
-              padding: EdgeInsets.fromLTRB(
-                16,
-                8,
-                16,
-                MediaQuery.of(context).viewInsets.bottom + 16,
+    Future<void> publish(BuildContext ctx, StateSetter? _) async {
+      final content = controller.text.trim();
+      if (content.isEmpty) return;
+      final postRef = await _postsCollection.add({
+        'author': widget.currentUserName,
+        'authorUid': widget.currentUserUid,
+        'authorPhotoUrl': widget.currentUserPhotoUrl,
+        'role': 'Member',
+        'content': content,
+        'tag': selectedTag,
+        'likesCount': 0,
+        'commentsCount': 0,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      widget.onPostCreated(
+        CommunityPost(
+          id: postRef.id,
+          author: widget.currentUserName,
+          authorUid: widget.currentUserUid,
+          authorPhotoUrl: widget.currentUserPhotoUrl,
+          role: 'Member',
+          content: content,
+          likes: 0,
+          comments: 0,
+          tag: selectedTag,
+          createdAt: DateTime.now(),
+        ),
+      );
+      if (ctx.mounted) Navigator.of(ctx).pop();
+    }
+
+    Widget formFields(StateSetter setS) => Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            DropdownButtonFormField<String>(
+              initialValue: selectedTag,
+              decoration: const InputDecoration(
+                labelText: 'Tag',
+                border: OutlineInputBorder(),
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text(
-                    'Create Post',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: 10),
-                  DropdownButtonFormField<String>(
-                    initialValue: selectedTag,
-                    decoration: const InputDecoration(
-                      labelText: 'Tag',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: tags
-                        .map(
-                          (tag) =>
-                              DropdownMenuItem(value: tag, child: Text(tag)),
-                        )
-                        .toList(),
-                    onChanged: (value) {
-                      if (value != null) {
-                        setModalState(() => selectedTag = value);
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: controller,
-                    minLines: 4,
-                    maxLines: 7,
-                    decoration: const InputDecoration(
-                      labelText: 'Share with community',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      onPressed: () async {
-                        final content = controller.text.trim();
-                        if (content.isEmpty) {
-                          return;
-                        }
-                        final postRef = await _postsCollection.add({
-                          'author': widget.currentUserName,
-                          'authorUid': widget.currentUserUid,
-                          'authorPhotoUrl': widget.currentUserPhotoUrl,
-                          'role': 'Member',
-                          'content': content,
-                          'tag': selectedTag,
-                          'likesCount': 0,
-                          'commentsCount': 0,
-                          'createdAt': FieldValue.serverTimestamp(),
-                        });
-                        widget.onPostCreated(
-                          CommunityPost(
-                            id: postRef.id,
-                            author: widget.currentUserName,
-                            authorUid: widget.currentUserUid,
-                            authorPhotoUrl: widget.currentUserPhotoUrl,
-                            role: 'Member',
-                            content: content,
-                            likes: 0,
-                            comments: 0,
-                            tag: selectedTag,
-                            createdAt: DateTime.now(),
-                          ),
-                        );
-                        if (context.mounted) {
-                          Navigator.of(context).pop();
-                        }
-                      },
-                      icon: const Icon(Icons.send_outlined),
-                      label: const Text('Publish'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.brand,
-                        foregroundColor: Colors.white,
-                      ),
-                    ),
-                  ),
-                ],
+              items: tags
+                  .map((t) => DropdownMenuItem(value: t, child: Text(t)))
+                  .toList(),
+              onChanged: (v) {
+                if (v != null) setS(() => selectedTag = v);
+              },
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: controller,
+              minLines: 4,
+              maxLines: 7,
+              decoration: const InputDecoration(
+                labelText: 'Share with community',
+                border: OutlineInputBorder(),
               ),
-            );
-          },
+            ),
+          ],
         );
-      },
-    );
+
+    if (isComputer) {
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => StatefulBuilder(
+          builder: (ctx, setS) => AlertDialog(
+            title: const Text('Create Post'),
+            content: SizedBox(width: 480, child: formFields(setS)),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton.icon(
+                onPressed: () => publish(ctx, setS),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.brand,
+                  foregroundColor: Colors.white,
+                ),
+                icon: const Icon(Icons.send_outlined),
+                label: const Text('Publish'),
+              ),
+            ],
+          ),
+        ),
+      );
+    } else {
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        showDragHandle: true,
+        builder: (ctx) => StatefulBuilder(
+          builder: (ctx, setS) => Padding(
+            padding: EdgeInsets.fromLTRB(
+              16,
+              8,
+              16,
+              MediaQuery.of(ctx).viewInsets.bottom + 16,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Create Post',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                formFields(setS),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () => publish(ctx, setS),
+                    icon: const Icon(Icons.send_outlined),
+                    label: const Text('Publish'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.brand,
+                      foregroundColor: Colors.white,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
+    controller.dispose();
   }
 
   String _timeAgo(DateTime time) {
@@ -327,88 +355,116 @@ class _CommunityScreenState extends State<CommunityScreen>
     final contentController = TextEditingController(text: post.content);
     String selectedTag = post.tag;
     const tags = ['Support', 'Wellbeing', 'Question', 'Update'];
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (context) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            return Padding(
-              padding: EdgeInsets.fromLTRB(
-                16,
-                8,
-                16,
-                MediaQuery.of(context).viewInsets.bottom + 16,
+    final isComputer = isComputerPlatform(Theme.of(context).platform);
+
+    Future<void> save(BuildContext ctx) async {
+      final nextContent = contentController.text.trim();
+      if (nextContent.isEmpty) return;
+      await _postsCollection.doc(post.id).update({
+        'content': nextContent,
+        'tag': selectedTag,
+      });
+      if (ctx.mounted) Navigator.of(ctx).pop();
+    }
+
+    Widget formFields(StateSetter setS) => Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            DropdownButtonFormField<String>(
+              initialValue: selectedTag,
+              decoration: const InputDecoration(
+                labelText: 'Tag',
+                border: OutlineInputBorder(),
               ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  const Text(
-                    'Edit Post',
-                    style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
-                  ),
-                  const SizedBox(height: 10),
-                  DropdownButtonFormField<String>(
-                    initialValue: selectedTag,
-                    decoration: const InputDecoration(
-                      labelText: 'Tag',
-                      border: OutlineInputBorder(),
-                    ),
-                    items: tags
-                        .map(
-                          (tag) =>
-                              DropdownMenuItem(value: tag, child: Text(tag)),
-                        )
-                        .toList(),
-                    onChanged: (value) {
-                      if (value != null) {
-                        setModalState(() => selectedTag = value);
-                      }
-                    },
-                  ),
-                  const SizedBox(height: 10),
-                  TextField(
-                    controller: contentController,
-                    minLines: 4,
-                    maxLines: 7,
-                    decoration: const InputDecoration(
-                      labelText: 'Post content',
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      onPressed: () async {
-                        final nextContent = contentController.text.trim();
-                        if (nextContent.isEmpty) {
-                          return;
-                        }
-                        await _postsCollection.doc(post.id).update({
-                          'content': nextContent,
-                          'tag': selectedTag,
-                        });
-                        if (context.mounted) {
-                          Navigator.of(context).pop();
-                        }
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: AppColors.brand,
-                        foregroundColor: Colors.white,
-                      ),
-                      icon: const Icon(Icons.save_outlined),
-                      label: const Text('Save changes'),
-                    ),
-                  ),
-                ],
+              items: tags
+                  .map((t) => DropdownMenuItem(value: t, child: Text(t)))
+                  .toList(),
+              onChanged: (v) {
+                if (v != null) setS(() => selectedTag = v);
+              },
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: contentController,
+              minLines: 4,
+              maxLines: 7,
+              decoration: const InputDecoration(
+                labelText: 'Post content',
+                border: OutlineInputBorder(),
               ),
-            );
-          },
+            ),
+          ],
         );
-      },
-    );
+
+    if (isComputer) {
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => StatefulBuilder(
+          builder: (ctx, setS) => AlertDialog(
+            title: const Text('Edit Post'),
+            content: SizedBox(width: 480, child: formFields(setS)),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(),
+                child: const Text('Cancel'),
+              ),
+              ElevatedButton.icon(
+                onPressed: () => save(ctx),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.brand,
+                  foregroundColor: Colors.white,
+                ),
+                icon: const Icon(Icons.save_outlined),
+                label: const Text('Save changes'),
+              ),
+            ],
+          ),
+        ),
+      );
+    } else {
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        showDragHandle: true,
+        builder: (ctx) => StatefulBuilder(
+          builder: (ctx, setS) => Padding(
+            padding: EdgeInsets.fromLTRB(
+              16,
+              8,
+              16,
+              MediaQuery.of(ctx).viewInsets.bottom + 16,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Text(
+                  'Edit Post',
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
+                const SizedBox(height: 10),
+                formFields(setS),
+                const SizedBox(height: 12),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton.icon(
+                    onPressed: () => save(ctx),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: AppColors.brand,
+                      foregroundColor: Colors.white,
+                    ),
+                    icon: const Icon(Icons.save_outlined),
+                    label: const Text('Save changes'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
     contentController.dispose();
   }
 
@@ -418,138 +474,172 @@ class _CommunityScreenState extends State<CommunityScreen>
 
   Future<void> _openCommentsSheet(CommunityPost post) async {
     final controller = TextEditingController();
-    await showModalBottomSheet<void>(
-      context: context,
-      isScrollControlled: true,
-      showDragHandle: true,
-      builder: (context) {
-        return SafeArea(
+    final isComputer = isComputerPlatform(Theme.of(context).platform);
+
+    Widget commentsList() => SizedBox(
+          height: 320,
+          child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+            stream: _postsCollection
+                .doc(post.id)
+                .collection('comments')
+                .orderBy('createdAt', descending: true)
+                .snapshots(),
+            builder: (context, snapshot) {
+              final docs = snapshot.data?.docs ?? const [];
+              if (docs.isEmpty) {
+                return const Center(
+                  child: Text(
+                    'No comments yet.',
+                    style: TextStyle(color: AppColors.text2),
+                  ),
+                );
+              }
+              return ListView.separated(
+                itemCount: docs.length,
+                separatorBuilder: (_, _) => const Divider(height: 10),
+                itemBuilder: (context, index) {
+                  final data = docs[index].data();
+                  final author = (data['author'] as String?) ?? 'Member';
+                  final authorUid = (data['authorUid'] as String?) ?? '';
+                  final content = (data['content'] as String?) ?? '';
+                  final canDeleteComment =
+                      authorUid == widget.currentUserUid;
+                  return StreamBuilder<
+                    DocumentSnapshot<Map<String, dynamic>>
+                  >(
+                    stream: _userDirectoryCollection
+                        .doc(authorUid)
+                        .snapshots(),
+                    builder: (context, directorySnapshot) {
+                      final authorName = _publicAuthorName(
+                        author,
+                        directorySnapshot.data?.data(),
+                      );
+                      return ListTile(
+                        dense: true,
+                        title: Text(
+                          authorName,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        subtitle: Text(content),
+                        trailing: canDeleteComment
+                            ? IconButton(
+                                onPressed: () async {
+                                  final confirmed = await _confirmDelete(
+                                    title: 'Delete comment?',
+                                    message:
+                                        'This comment will be removed permanently.',
+                                  );
+                                  if (!confirmed) return;
+                                  await _deleteComment(
+                                    post.id,
+                                    docs[index].id,
+                                  );
+                                },
+                                tooltip: 'Delete comment',
+                                icon: const Icon(
+                                  Icons.delete_outline,
+                                  color: AppColors.brand,
+                                ),
+                              )
+                            : null,
+                      );
+                    },
+                  );
+                },
+              );
+            },
+          ),
+        );
+
+    Widget commentInput(BuildContext ctx) => Row(
+          children: [
+            Expanded(
+              child: TextField(
+                controller: controller,
+                decoration: const InputDecoration(
+                  labelText: 'Add a comment',
+                  border: OutlineInputBorder(),
+                ),
+              ),
+            ),
+            const SizedBox(width: 8),
+            ElevatedButton.icon(
+              onPressed: () async {
+                await _addComment(post.id, controller.text);
+                controller.clear();
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.brand,
+                foregroundColor: Colors.white,
+              ),
+              icon: const Icon(Icons.send_outlined),
+              label: const Text('Send'),
+            ),
+          ],
+        );
+
+    if (isComputer) {
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: const Text('Comments'),
+          contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+          content: SizedBox(
+            width: 520,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                commentsList(),
+                const SizedBox(height: 12),
+                commentInput(ctx),
+                const SizedBox(height: 8),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Close'),
+            ),
+          ],
+        ),
+      );
+    } else {
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        showDragHandle: true,
+        builder: (ctx) => SafeArea(
           child: Padding(
             padding: EdgeInsets.fromLTRB(
               16,
               8,
               16,
-              MediaQuery.of(context).viewInsets.bottom + 16,
+              MediaQuery.of(ctx).viewInsets.bottom + 16,
             ),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
                 const Text(
                   'Comments',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+                  style: TextStyle(
+                    fontSize: 20,
+                    fontWeight: FontWeight.w700,
+                  ),
                 ),
                 const SizedBox(height: 10),
-                SizedBox(
-                  height: 260,
-                  child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                    stream: _postsCollection
-                        .doc(post.id)
-                        .collection('comments')
-                        .orderBy('createdAt', descending: true)
-                        .snapshots(),
-                    builder: (context, snapshot) {
-                      final docs = snapshot.data?.docs ?? const [];
-                      if (docs.isEmpty) {
-                        return const Center(
-                          child: Text(
-                            'No comments yet.',
-                            style: TextStyle(color: AppColors.text2),
-                          ),
-                        );
-                      }
-                      return ListView.separated(
-                        itemCount: docs.length,
-                        separatorBuilder: (_, _) => const Divider(height: 10),
-                        itemBuilder: (context, index) {
-                          final data = docs[index].data();
-                          final author =
-                              (data['author'] as String?) ?? 'Member';
-                          final authorUid =
-                              (data['authorUid'] as String?) ?? '';
-                          final content = (data['content'] as String?) ?? '';
-                          final canDeleteComment =
-                              authorUid == widget.currentUserUid;
-                          return StreamBuilder<
-                            DocumentSnapshot<Map<String, dynamic>>
-                          >(
-                            stream: _userDirectoryCollection
-                                .doc(authorUid)
-                                .snapshots(),
-                            builder: (context, directorySnapshot) {
-                              final authorName = _publicAuthorName(
-                                author,
-                                directorySnapshot.data?.data(),
-                              );
-                              return ListTile(
-                                dense: true,
-                                title: Text(
-                                  authorName,
-                                  style: const TextStyle(
-                                    fontWeight: FontWeight.w600,
-                                  ),
-                                ),
-                                subtitle: Text(content),
-                                trailing: canDeleteComment
-                                    ? IconButton(
-                                        onPressed: () async {
-                                          final confirmed = await _confirmDelete(
-                                            title: 'Delete comment?',
-                                            message:
-                                                'This comment will be removed permanently.',
-                                          );
-                                          if (!confirmed) {
-                                            return;
-                                          }
-                                          await _deleteComment(
-                                            post.id,
-                                            docs[index].id,
-                                          );
-                                        },
-                                        tooltip: 'Delete comment',
-                                        icon: const Icon(
-                                          Icons.delete_outline,
-                                          color: AppColors.brand,
-                                        ),
-                                      )
-                                    : null,
-                              );
-                            },
-                          );
-                        },
-                      );
-                    },
-                  ),
-                ),
+                commentsList(),
                 const SizedBox(height: 8),
-                TextField(
-                  controller: controller,
-                  decoration: const InputDecoration(
-                    labelText: 'Add a comment',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 8),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    onPressed: () async {
-                      await _addComment(post.id, controller.text);
-                      controller.clear();
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppColors.brand,
-                      foregroundColor: Colors.white,
-                    ),
-                    icon: const Icon(Icons.send_outlined),
-                    label: const Text('Send comment'),
-                  ),
-                ),
+                commentInput(ctx),
               ],
             ),
           ),
-        );
-      },
-    );
+        ),
+      );
+    }
     controller.dispose();
   }
 
@@ -749,7 +839,7 @@ class _CommunityScreenState extends State<CommunityScreen>
     );
   }
 
-  Widget _buildArticlesTab() {
+  Widget _buildArticlesTab(bool isComputer) {
     return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
       stream: _articlesCollection
           .orderBy('createdAt', descending: true)
@@ -767,33 +857,54 @@ class _CommunityScreenState extends State<CommunityScreen>
             ),
           );
         }
-        final articles = docs.map((doc) {
-          return HelpHerArticle.fromFirestoreData(doc.id, doc.data());
-        }).toList();
-        return ListView.builder(
-          padding: const EdgeInsets.symmetric(vertical: 8),
-          itemCount: articles.length,
-          itemBuilder: (context, index) {
-            final article = articles[index];
-            return ArticleCard(
+        final articles = docs
+            .map((doc) => HelpHerArticle.fromFirestoreData(doc.id, doc.data()))
+            .toList();
+
+        Widget cardFor(HelpHerArticle article) => ArticleCard(
               title: article.title,
               author: article.author,
               readTime: article.readTime,
               color: article.accent,
               icon: article.icon,
-              onTap: () {
-                Navigator.of(context).push(
-                  buildSlideRoute<void>(
-                    page: ArticleDetailScreen(
-                      article: article,
-                      currentUserUid: widget.currentUserUid,
-                      currentUserName: widget.currentUserName,
-                    ),
+              onTap: () => Navigator.of(context).push(
+                buildSlideRoute<void>(
+                  page: ArticleDetailScreen(
+                    article: article,
+                    currentUserUid: widget.currentUserUid,
+                    currentUserName: widget.currentUserName,
                   ),
-                );
-              },
+                ),
+              ),
             );
-          },
+
+        if (isComputer) {
+          // Two-column grid on desktop
+          final rows = <Widget>[];
+          for (var i = 0; i < articles.length; i += 2) {
+            rows.add(
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(child: cardFor(articles[i])),
+                  if (i + 1 < articles.length)
+                    Expanded(child: cardFor(articles[i + 1]))
+                  else
+                    const Expanded(child: SizedBox()),
+                ],
+              ),
+            );
+          }
+          return SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+            child: Column(children: rows),
+          );
+        }
+
+        return ListView.builder(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          itemCount: articles.length,
+          itemBuilder: (_, i) => cardFor(articles[i]),
         );
       },
     );
@@ -801,31 +912,47 @@ class _CommunityScreenState extends State<CommunityScreen>
 
   @override
   Widget build(BuildContext context) {
+    final isComputer = isComputerPlatform(Theme.of(context).platform);
     final isPostsTab = _tabController.index == 0;
     return Scaffold(
-      floatingActionButton: isPostsTab
-          ? FloatingActionButton.extended(
+      // Hide FAB on desktop — we show a button in the header instead
+      floatingActionButton: isComputer || !isPostsTab
+          ? null
+          : FloatingActionButton.extended(
               onPressed: _openCreatePostSheet,
               backgroundColor: AppColors.brand,
               foregroundColor: Colors.white,
               icon: const Icon(Icons.edit_outlined),
               label: const Text('Post'),
-            )
-          : null,
+            ),
       body: SafeArea(
         child: Column(
           children: [
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-              child: Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  'Community',
-                  style: TextStyle(
-                    fontSize: 28,
-                    fontWeight: FontWeight.w700,
+              child: Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Community',
+                      style: TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
                   ),
-                ),
+                  // On desktop show New Post button in header (only on Posts tab)
+                  if (isComputer && isPostsTab)
+                    FilledButton.icon(
+                      onPressed: _openCreatePostSheet,
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.brand,
+                        foregroundColor: Colors.white,
+                      ),
+                      icon: const Icon(Icons.edit_outlined, size: 18),
+                      label: const Text('New Post'),
+                    ),
+                ],
               ),
             ),
             const SizedBox(height: 8),
@@ -844,54 +971,77 @@ class _CommunityScreenState extends State<CommunityScreen>
                 controller: _tabController,
                 children: [
                   // ── Posts tab ──────────────────────────────────────────
-                  StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                    stream: _postsCollection
-                        .orderBy('createdAt', descending: true)
-                        .snapshots(),
-                    builder: (context, snapshot) {
-                      if (!snapshot.hasData) {
-                        return const Center(child: CircularProgressIndicator());
-                      }
-                      final docs = snapshot.data!.docs;
-                      if (docs.isEmpty) {
-                        return const Center(
-                          child: Text(
-                            'No posts yet. Be the first to share.',
-                            style: TextStyle(color: AppColors.text2),
-                          ),
-                        );
-                      }
-                      final posts = docs.map((doc) {
-                        final data = doc.data();
-                        final createdAtValue = data['createdAt'];
-                        final createdAt = createdAtValue is Timestamp
-                            ? createdAtValue.toDate()
-                            : DateTime.now();
-                        return CommunityPost(
-                          id: doc.id,
-                          author: (data['author'] as String?) ?? 'Member',
-                          authorUid: (data['authorUid'] as String?) ?? '',
-                          authorPhotoUrl:
-                              (data['authorPhotoUrl'] as String?)?.trim(),
-                          role: (data['role'] as String?) ?? 'Member',
-                          content: (data['content'] as String?) ?? '',
-                          likes: (data['likesCount'] as num?)?.toInt() ?? 0,
-                          comments:
-                              (data['commentsCount'] as num?)?.toInt() ?? 0,
-                          tag: (data['tag'] as String?) ?? 'Support',
-                          createdAt: createdAt,
-                        );
-                      }).toList();
-                      return ListView.builder(
-                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
-                        itemCount: posts.length,
-                        itemBuilder: (context, index) =>
-                            _buildPostCard(posts[index]),
-                      );
-                    },
+                  Align(
+                    alignment: Alignment.topCenter,
+                    child: ConstrainedBox(
+                      constraints: BoxConstraints(
+                        maxWidth: isComputer ? 860 : double.infinity,
+                      ),
+                      child: StreamBuilder<
+                        QuerySnapshot<Map<String, dynamic>>
+                      >(
+                        stream: _postsCollection
+                            .orderBy('createdAt', descending: true)
+                            .snapshots(),
+                        builder: (context, snapshot) {
+                          if (!snapshot.hasData) {
+                            return const Center(
+                              child: CircularProgressIndicator(),
+                            );
+                          }
+                          final docs = snapshot.data!.docs;
+                          if (docs.isEmpty) {
+                            return const Center(
+                              child: Text(
+                                'No posts yet. Be the first to share.',
+                                style: TextStyle(color: AppColors.text2),
+                              ),
+                            );
+                          }
+                          final posts = docs.map((doc) {
+                            final data = doc.data();
+                            final createdAtValue = data['createdAt'];
+                            final createdAt = createdAtValue is Timestamp
+                                ? createdAtValue.toDate()
+                                : DateTime.now();
+                            return CommunityPost(
+                              id: doc.id,
+                              author:
+                                  (data['author'] as String?) ?? 'Member',
+                              authorUid:
+                                  (data['authorUid'] as String?) ?? '',
+                              authorPhotoUrl: (data['authorPhotoUrl']
+                                      as String?)
+                                  ?.trim(),
+                              role: (data['role'] as String?) ?? 'Member',
+                              content: (data['content'] as String?) ?? '',
+                              likes: (data['likesCount'] as num?)
+                                      ?.toInt() ??
+                                  0,
+                              comments: (data['commentsCount'] as num?)
+                                      ?.toInt() ??
+                                  0,
+                              tag: (data['tag'] as String?) ?? 'Support',
+                              createdAt: createdAt,
+                            );
+                          }).toList();
+                          return ListView.builder(
+                            padding: const EdgeInsets.fromLTRB(
+                              16,
+                              8,
+                              16,
+                              16,
+                            ),
+                            itemCount: posts.length,
+                            itemBuilder: (context, index) =>
+                                _buildPostCard(posts[index]),
+                          );
+                        },
+                      ),
+                    ),
                   ),
                   // ── Articles tab ───────────────────────────────────────
-                  _buildArticlesTab(),
+                  _buildArticlesTab(isComputer),
                 ],
               ),
             ),
