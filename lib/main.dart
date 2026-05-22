@@ -1816,6 +1816,10 @@ class _MainShellState extends State<MainShell>
         page: ArticlesScreen(
           articles: _articles,
           canManageArticles: widget.canManageArticles,
+          currentUserUid: widget.currentUserUid,
+          currentUserName: _profile.username != null
+              ? '@${_profile.username}'
+              : widget.currentUsername,
           onArticleAdded: _addArticle,
           onArticleUpdated: _updateArticle,
           onArticleDeleted: _deleteArticle,
@@ -2663,6 +2667,10 @@ class _MainShellState extends State<MainShell>
                 final screens = [
                   HomeScreen(
                     userName: _profile.username ?? _profile.name,
+                    currentUserUid: widget.currentUserUid,
+                    currentUserName: _profile.username != null
+                        ? '@${_profile.username}'
+                        : widget.currentUsername,
                     featuredArticles: _articles.take(2).toList(),
                     onOpenSafety: () => _switchTab(3, animated: true),
                     onOpenCommunity: () => _switchTab(1, animated: true),
@@ -2677,7 +2685,6 @@ class _MainShellState extends State<MainShell>
                         ? '@${_profile.username}'
                         : widget.currentUsername,
                     currentUserPhotoUrl: _profile.photoUrl,
-                    onOpenArticles: () => _openArticlesScreen(context),
                     onPostCreated: _handleCommunityPostCreated,
                     onCommentAdded: _handleCommentAdded,
                   ),
@@ -2949,6 +2956,8 @@ class _MainShellState extends State<MainShell>
 
 class HomeScreen extends StatelessWidget {
   final String userName;
+  final String currentUserUid;
+  final String currentUserName;
   final List<HelpHerArticle> featuredArticles;
   final VoidCallback onOpenSafety;
   final VoidCallback onOpenCommunity;
@@ -2959,6 +2968,8 @@ class HomeScreen extends StatelessWidget {
   const HomeScreen({
     super.key,
     required this.userName,
+    required this.currentUserUid,
+    required this.currentUserName,
     required this.featuredArticles,
     required this.onOpenSafety,
     required this.onOpenCommunity,
@@ -2988,7 +2999,11 @@ class HomeScreen extends StatelessWidget {
               onTap: () {
                 Navigator.of(context).push(
                   buildSlideRoute<void>(
-                    page: ArticleDetailScreen(article: article),
+                    page: ArticleDetailScreen(
+                      article: article,
+                      currentUserUid: currentUserUid,
+                      currentUserName: currentUserName,
+                    ),
                   ),
                 );
               },
@@ -5136,6 +5151,8 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
 class ArticlesScreen extends StatefulWidget {
   final List<HelpHerArticle> articles;
   final bool canManageArticles;
+  final String currentUserUid;
+  final String currentUserName;
   final FutureOr<void> Function(HelpHerArticle) onArticleAdded;
   final FutureOr<void> Function(HelpHerArticle) onArticleUpdated;
   final FutureOr<void> Function(String) onArticleDeleted;
@@ -5144,6 +5161,8 @@ class ArticlesScreen extends StatefulWidget {
     super.key,
     required this.articles,
     required this.canManageArticles,
+    required this.currentUserUid,
+    required this.currentUserName,
     required this.onArticleAdded,
     required this.onArticleUpdated,
     required this.onArticleDeleted,
@@ -5491,7 +5510,11 @@ class _ArticlesScreenState extends State<ArticlesScreen> {
                           onTap: () {
                             Navigator.of(context).push(
                               buildSlideRoute<void>(
-                                page: ArticleDetailScreen(article: article),
+                                page: ArticleDetailScreen(
+                                  article: article,
+                                  currentUserUid: widget.currentUserUid,
+                                  currentUserName: widget.currentUserName,
+                                ),
                               ),
                             );
                           },
@@ -5600,16 +5623,59 @@ class _ArticleFeedCard extends StatelessWidget {
   }
 }
 
-class ArticleDetailScreen extends StatelessWidget {
+class ArticleDetailScreen extends StatefulWidget {
   final HelpHerArticle article;
+  final String currentUserUid;
+  final String currentUserName;
 
-  const ArticleDetailScreen({super.key, required this.article});
+  const ArticleDetailScreen({
+    super.key,
+    required this.article,
+    required this.currentUserUid,
+    required this.currentUserName,
+  });
+
+  @override
+  State<ArticleDetailScreen> createState() => _ArticleDetailScreenState();
+}
+
+class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
+  FirebaseFirestore get _firestore => FirebaseFirestore.instance;
+
+  CollectionReference<Map<String, dynamic>> get _commentsRef => _firestore
+      .collection('articles')
+      .doc(widget.article.id)
+      .collection('comments');
+
+  final _commentController = TextEditingController();
+
+  @override
+  void dispose() {
+    _commentController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _addComment() async {
+    final text = _commentController.text.trim();
+    if (text.isEmpty) return;
+    await _commentsRef.add({
+      'author': widget.currentUserName,
+      'authorUid': widget.currentUserUid,
+      'content': text,
+      'createdAt': FieldValue.serverTimestamp(),
+    });
+    _commentController.clear();
+  }
+
+  Future<void> _deleteComment(String commentId) async {
+    await _commentsRef.doc(commentId).delete();
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        title: Text(article.category),
+        title: Text(widget.article.category),
         surfaceTintColor: Colors.transparent,
       ),
       body: ListView(
@@ -5618,26 +5684,101 @@ class ArticleDetailScreen extends StatelessWidget {
           Container(
             height: 120,
             decoration: BoxDecoration(
-              color: article.accent,
+              color: widget.article.accent,
               borderRadius: BorderRadius.circular(16),
             ),
-            child: Icon(article.icon, size: 44, color: AppColors.brand),
+            child: Icon(widget.article.icon, size: 44, color: AppColors.brand),
           ),
           const SizedBox(height: 16),
           Text(
-            article.title,
+            widget.article.title,
             style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800),
           ),
           const SizedBox(height: 8),
           Text(
-            '${article.author} • ${article.readTime}',
+            '${widget.article.author} • ${widget.article.readTime}',
             style: const TextStyle(color: AppColors.text2),
           ),
           const SizedBox(height: 16),
           Text(
-            article.content,
+            widget.article.content,
             style: const TextStyle(height: 1.6, fontSize: 16),
           ),
+          const SizedBox(height: 32),
+          const Divider(),
+          const SizedBox(height: 8),
+          const Text(
+            'Comments',
+            style: TextStyle(fontSize: 20, fontWeight: FontWeight.w700),
+          ),
+          const SizedBox(height: 12),
+          StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+            stream: _commentsRef
+                .orderBy('createdAt', descending: false)
+                .snapshots(),
+            builder: (context, snapshot) {
+              final docs = snapshot.data?.docs ?? const [];
+              if (docs.isEmpty) {
+                return const Padding(
+                  padding: EdgeInsets.symmetric(vertical: 8),
+                  child: Text(
+                    'No comments yet. Be the first to comment.',
+                    style: TextStyle(color: AppColors.text2),
+                  ),
+                );
+              }
+              return Column(
+                children: docs.map((doc) {
+                  final data = doc.data();
+                  final author = (data['author'] as String?) ?? 'Member';
+                  final authorUid = (data['authorUid'] as String?) ?? '';
+                  final content = (data['content'] as String?) ?? '';
+                  final canDelete = authorUid == widget.currentUserUid;
+                  return ListTile(
+                    contentPadding: EdgeInsets.zero,
+                    title: Text(
+                      author,
+                      style: const TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    subtitle: Text(content),
+                    trailing: canDelete
+                        ? IconButton(
+                            icon: const Icon(
+                              Icons.delete_outline,
+                              color: AppColors.brand,
+                            ),
+                            onPressed: () => _deleteComment(doc.id),
+                          )
+                        : null,
+                  );
+                }).toList(),
+              );
+            },
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _commentController,
+            decoration: const InputDecoration(
+              labelText: 'Add a comment',
+              border: OutlineInputBorder(),
+            ),
+            minLines: 1,
+            maxLines: 3,
+          ),
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: _addComment,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.brand,
+                foregroundColor: Colors.white,
+              ),
+              icon: const Icon(Icons.send_outlined),
+              label: const Text('Post comment'),
+            ),
+          ),
+          const SizedBox(height: 16),
         ],
       ),
     );
@@ -5861,7 +6002,6 @@ class CommunityScreen extends StatefulWidget {
   final String currentUserUid;
   final String currentUserName;
   final String? currentUserPhotoUrl;
-  final VoidCallback onOpenArticles;
   final ValueChanged<CommunityPost> onPostCreated;
   final void Function({
     required String postAuthorUid,
@@ -5875,7 +6015,6 @@ class CommunityScreen extends StatefulWidget {
     required this.currentUserUid,
     required this.currentUserName,
     this.currentUserPhotoUrl,
-    required this.onOpenArticles,
     required this.onPostCreated,
     required this.onCommentAdded,
   });
@@ -5884,13 +6023,31 @@ class CommunityScreen extends StatefulWidget {
   State<CommunityScreen> createState() => _CommunityScreenState();
 }
 
-class _CommunityScreenState extends State<CommunityScreen> {
+class _CommunityScreenState extends State<CommunityScreen>
+    with SingleTickerProviderStateMixin {
   FirebaseFirestore get _firestore => FirebaseFirestore.instance;
 
   CollectionReference<Map<String, dynamic>> get _postsCollection =>
       _firestore.collection('communityPosts');
   CollectionReference<Map<String, dynamic>> get _userDirectoryCollection =>
       _firestore.collection('userDirectory');
+  CollectionReference<Map<String, dynamic>> get _articlesCollection =>
+      _firestore.collection('articles');
+
+  late final TabController _tabController;
+
+  @override
+  void initState() {
+    super.initState();
+    _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
 
   String _publicAuthorName(String storedAuthor, Map<String, dynamic>? data) {
     final username =
@@ -6582,86 +6739,150 @@ class _CommunityScreenState extends State<CommunityScreen> {
     );
   }
 
+  Widget _buildArticlesTab() {
+    return StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+      stream: _articlesCollection
+          .orderBy('createdAt', descending: true)
+          .snapshots(),
+      builder: (context, snapshot) {
+        if (!snapshot.hasData) {
+          return const Center(child: CircularProgressIndicator());
+        }
+        final docs = snapshot.data!.docs;
+        if (docs.isEmpty) {
+          return const Center(
+            child: Text(
+              'No articles yet.',
+              style: TextStyle(color: AppColors.text2),
+            ),
+          );
+        }
+        final articles = docs.map((doc) {
+          return HelpHerArticle.fromFirestoreData(doc.id, doc.data());
+        }).toList();
+        return ListView.builder(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          itemCount: articles.length,
+          itemBuilder: (context, index) {
+            final article = articles[index];
+            return ArticleCard(
+              title: article.title,
+              author: article.author,
+              readTime: article.readTime,
+              color: article.accent,
+              icon: article.icon,
+              onTap: () {
+                Navigator.of(context).push(
+                  buildSlideRoute<void>(
+                    page: ArticleDetailScreen(
+                      article: article,
+                      currentUserUid: widget.currentUserUid,
+                      currentUserName: widget.currentUserName,
+                    ),
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final isPostsTab = _tabController.index == 0;
     return Scaffold(
-      floatingActionButton: FloatingActionButton.extended(
-        onPressed: _openCreatePostSheet,
-        backgroundColor: AppColors.brand,
-        foregroundColor: Colors.white,
-        icon: const Icon(Icons.edit_outlined),
-        label: const Text('Post'),
-      ),
+      floatingActionButton: isPostsTab
+          ? FloatingActionButton.extended(
+              onPressed: _openCreatePostSheet,
+              backgroundColor: AppColors.brand,
+              foregroundColor: Colors.white,
+              icon: const Icon(Icons.edit_outlined),
+              label: const Text('Post'),
+            )
+          : null,
       body: SafeArea(
         child: Column(
           children: [
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 12),
-              child: Row(
-                children: [
-                  const Expanded(
-                    child: Text(
-                      'Community Forum',
-                      style: TextStyle(
-                        fontSize: 28,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+              child: Align(
+                alignment: Alignment.centerLeft,
+                child: Text(
+                  'Community',
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.w700,
                   ),
-                  OutlinedButton.icon(
-                    onPressed: widget.onOpenArticles,
-                    icon: const Icon(Icons.menu_book_outlined),
-                    label: const Text('Articles'),
-                  ),
-                ],
+                ),
               ),
             ),
+            const SizedBox(height: 8),
+            TabBar(
+              controller: _tabController,
+              labelColor: AppColors.brand,
+              unselectedLabelColor: AppColors.text2,
+              indicatorColor: AppColors.brand,
+              tabs: const [
+                Tab(text: 'Posts'),
+                Tab(text: 'Articles'),
+              ],
+            ),
             Expanded(
-              child: StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
-                stream: _postsCollection
-                    .orderBy('createdAt', descending: true)
-                    .snapshots(),
-                builder: (context, snapshot) {
-                  if (!snapshot.hasData) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-                  final docs = snapshot.data!.docs;
-                  if (docs.isEmpty) {
-                    return const Center(
-                      child: Text(
-                        'No posts yet. Be the first to share.',
-                        style: TextStyle(color: AppColors.text2),
-                      ),
-                    );
-                  }
-                  final posts = docs.map((doc) {
-                    final data = doc.data();
-                    final createdAtValue = data['createdAt'];
-                    final createdAt = createdAtValue is Timestamp
-                        ? createdAtValue.toDate()
-                        : DateTime.now();
-                    return CommunityPost(
-                      id: doc.id,
-                      author: (data['author'] as String?) ?? 'Member',
-                      authorUid: (data['authorUid'] as String?) ?? '',
-                      authorPhotoUrl: (data['authorPhotoUrl'] as String?)
-                          ?.trim(),
-                      role: (data['role'] as String?) ?? 'Member',
-                      content: (data['content'] as String?) ?? '',
-                      likes: (data['likesCount'] as num?)?.toInt() ?? 0,
-                      comments: (data['commentsCount'] as num?)?.toInt() ?? 0,
-                      tag: (data['tag'] as String?) ?? 'Support',
-                      createdAt: createdAt,
-                    );
-                  }).toList();
-                  return ListView.builder(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-                    itemCount: posts.length,
-                    itemBuilder: (context, index) =>
-                        _buildPostCard(posts[index]),
-                  );
-                },
+              child: TabBarView(
+                controller: _tabController,
+                children: [
+                  // ── Posts tab ──────────────────────────────────────────
+                  StreamBuilder<QuerySnapshot<Map<String, dynamic>>>(
+                    stream: _postsCollection
+                        .orderBy('createdAt', descending: true)
+                        .snapshots(),
+                    builder: (context, snapshot) {
+                      if (!snapshot.hasData) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+                      final docs = snapshot.data!.docs;
+                      if (docs.isEmpty) {
+                        return const Center(
+                          child: Text(
+                            'No posts yet. Be the first to share.',
+                            style: TextStyle(color: AppColors.text2),
+                          ),
+                        );
+                      }
+                      final posts = docs.map((doc) {
+                        final data = doc.data();
+                        final createdAtValue = data['createdAt'];
+                        final createdAt = createdAtValue is Timestamp
+                            ? createdAtValue.toDate()
+                            : DateTime.now();
+                        return CommunityPost(
+                          id: doc.id,
+                          author: (data['author'] as String?) ?? 'Member',
+                          authorUid: (data['authorUid'] as String?) ?? '',
+                          authorPhotoUrl:
+                              (data['authorPhotoUrl'] as String?)?.trim(),
+                          role: (data['role'] as String?) ?? 'Member',
+                          content: (data['content'] as String?) ?? '',
+                          likes: (data['likesCount'] as num?)?.toInt() ?? 0,
+                          comments:
+                              (data['commentsCount'] as num?)?.toInt() ?? 0,
+                          tag: (data['tag'] as String?) ?? 'Support',
+                          createdAt: createdAt,
+                        );
+                      }).toList();
+                      return ListView.builder(
+                        padding: const EdgeInsets.fromLTRB(16, 8, 16, 16),
+                        itemCount: posts.length,
+                        itemBuilder: (context, index) =>
+                            _buildPostCard(posts[index]),
+                      );
+                    },
+                  ),
+                  // ── Articles tab ───────────────────────────────────────
+                  _buildArticlesTab(),
+                ],
               ),
             ),
           ],
