@@ -7,7 +7,8 @@
 
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:helpher/main.dart';
+import 'package:helpher/app.dart';
+import 'package:helpher/models/user_profile.dart';
 
 void main() {
   testWidgets('HelpHer app renders sign-in gate', (WidgetTester tester) async {
