@@ -169,6 +169,13 @@ service cloud.firestore {
             (
               resource.data.type == 'group' &&
               request.auth.uid == resource.data.createdBy
+            ) ||
+            // Any member may remove only themselves (leave / delete from list).
+            (
+              resource.data.members.removeAll(request.resource.data.members)
+                  .hasOnly([request.auth.uid]) &&
+              request.resource.data.diff(resource.data)
+                  .changedKeys().hasOnly(['members', 'updatedAt'])
             )
           );
       allow delete: if false;

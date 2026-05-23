@@ -196,6 +196,7 @@ class _ChatsScreenState extends State<ChatsScreen> {
                   final existing = await _roomsCollection
                       .where('type', isEqualTo: 'direct')
                       .where('directKey', isEqualTo: directKey)
+                      .where('members', arrayContains: widget.currentUserUid)
                       .limit(1)
                       .get();
                   String roomId;
