@@ -19,7 +19,6 @@ import '../screens/community/community_screen.dart';
 import '../screens/chat/chats_screen.dart';
 import '../screens/emergency/emergency_screen.dart';
 import '../screens/profile/profile_screen.dart';
-import '../screens/articles/articles_screen.dart';
 import '../screens/notifications/notifications_screen.dart';
 import '../widgets/desktop_sidebar.dart';
 
@@ -57,6 +56,7 @@ class _MainShellState extends State<MainShell>
   _notificationReadsStream;
   late final Stream<QuerySnapshot<Map<String, dynamic>>> _chatRoomsStream;
   int _tabSlideDirection = 1;
+  int _switchToArticlesSerial = 0;
 
   // ── Windows local notifications ────────────────────────────────────────────
   FlutterLocalNotificationsPlugin? _localNotifs;
@@ -168,22 +168,9 @@ class _MainShellState extends State<MainShell>
     _tabEntranceController.value = 1;
   }
 
-  void _openArticlesScreen(BuildContext context) {
-    Navigator.of(context).push(
-      buildSlideRoute<void>(
-        page: ArticlesScreen(
-          articles: _articles,
-          canManageArticles: widget.canManageArticles,
-          currentUserUid: widget.currentUserUid,
-          currentUserName: _profile.username != null
-              ? '@${_profile.username}'
-              : widget.currentUsername,
-          onArticleAdded: _addArticle,
-          onArticleUpdated: _updateArticle,
-          onArticleDeleted: _deleteArticle,
-        ),
-      ),
-    );
+  void _openArticlesInCommunity() {
+    _switchTab(1, animated: true);
+    setState(() => _switchToArticlesSerial++);
   }
 
   static const _secureStorage = FlutterSecureStorage();
@@ -1032,7 +1019,7 @@ class _MainShellState extends State<MainShell>
                     featuredArticles: _articles.take(2).toList(),
                     onOpenSafety: () => _switchTab(3, animated: true),
                     onOpenCommunity: () => _switchTab(1, animated: true),
-                    onOpenArticles: () => _openArticlesScreen(context),
+                    onOpenArticles: _openArticlesInCommunity,
                     onOpenNotifications: () =>
                         _openNotificationsScreen(context, notifications),
                     unreadNotifications: unreadNotificationCount,
@@ -1045,6 +1032,11 @@ class _MainShellState extends State<MainShell>
                     currentUserPhotoUrl: _profile.photoUrl,
                     onPostCreated: _handleCommunityPostCreated,
                     onCommentAdded: _handleCommentAdded,
+                    canManageArticles: widget.canManageArticles,
+                    onArticleAdded: _addArticle,
+                    onArticleUpdated: _updateArticle,
+                    onArticleDeleted: _deleteArticle,
+                    switchToArticlesSerial: _switchToArticlesSerial,
                   ),
                   ChatsScreen(
                     currentUserUid: widget.currentUserUid,

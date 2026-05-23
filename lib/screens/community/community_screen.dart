@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
+import 'dart:async';
+
 import '../../app.dart';
 import '../../models/article.dart';
 import '../../models/community_post.dart';
@@ -19,6 +21,12 @@ class CommunityScreen extends StatefulWidget {
     required String commentText,
   })
   onCommentAdded;
+  final bool canManageArticles;
+  final FutureOr<void> Function(HelpHerArticle) onArticleAdded;
+  final FutureOr<void> Function(HelpHerArticle) onArticleUpdated;
+  final FutureOr<void> Function(String) onArticleDeleted;
+  // Incremented by the parent each time it wants to switch to the Articles tab.
+  final int switchToArticlesSerial;
 
   const CommunityScreen({
     super.key,
@@ -27,6 +35,11 @@ class CommunityScreen extends StatefulWidget {
     this.currentUserPhotoUrl,
     required this.onPostCreated,
     required this.onCommentAdded,
+    required this.canManageArticles,
+    required this.onArticleAdded,
+    required this.onArticleUpdated,
+    required this.onArticleDeleted,
+    this.switchToArticlesSerial = 0,
   });
 
   @override
@@ -54,9 +67,183 @@ class _CommunityScreenState extends State<CommunityScreen>
   }
 
   @override
+  void didUpdateWidget(CommunityScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.switchToArticlesSerial != oldWidget.switchToArticlesSerial) {
+      _tabController.animateTo(1);
+    }
+  }
+
+  @override
   void dispose() {
     _tabController.dispose();
     super.dispose();
+  }
+
+  // ── Article management ─────────────────────────────────────────────────────
+
+  static const List<String> _articleCategories = ['Safety', 'Legal', 'Community'];
+
+  Future<void> _openArticleSheet({HelpHerArticle? existing}) async {
+    final isEditing = existing != null;
+    final titleCtrl = TextEditingController(text: existing?.title);
+    final authorCtrl = TextEditingController(text: existing?.author);
+    final summaryCtrl = TextEditingController(text: existing?.summary);
+    final contentCtrl = TextEditingController(text: existing?.content);
+    String selectedCategory = existing?.category ?? 'Safety';
+    final isComputer = isComputerPlatform(Theme.of(context).platform);
+
+    Widget formFields(StateSetter setS) => Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: titleCtrl,
+              decoration: const InputDecoration(labelText: 'Title', border: OutlineInputBorder()),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: authorCtrl,
+              decoration: const InputDecoration(labelText: 'Author', border: OutlineInputBorder()),
+            ),
+            const SizedBox(height: 10),
+            DropdownButtonFormField<String>(
+              initialValue: selectedCategory,
+              decoration: const InputDecoration(labelText: 'Category', border: OutlineInputBorder()),
+              items: _articleCategories
+                  .map((c) => DropdownMenuItem(value: c, child: Text(c)))
+                  .toList(),
+              onChanged: (v) { if (v != null) setS(() => selectedCategory = v); },
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: summaryCtrl,
+              maxLines: 2,
+              decoration: const InputDecoration(labelText: 'Short summary', border: OutlineInputBorder()),
+            ),
+            const SizedBox(height: 10),
+            TextField(
+              controller: contentCtrl,
+              minLines: 5,
+              maxLines: 8,
+              decoration: const InputDecoration(labelText: 'Article content', border: OutlineInputBorder()),
+            ),
+          ],
+        );
+
+    void save(BuildContext ctx) {
+      final article = _buildArticle(
+        id: existing?.id,
+        title: titleCtrl.text,
+        author: authorCtrl.text,
+        category: selectedCategory,
+        summary: summaryCtrl.text,
+        content: contentCtrl.text,
+      );
+      if (article == null) {
+        ScaffoldMessenger.of(ctx).showSnackBar(
+          const SnackBar(content: Text('Please fill all fields before saving.')),
+        );
+        return;
+      }
+      if (isEditing) {
+        widget.onArticleUpdated(article);
+      } else {
+        widget.onArticleAdded(article);
+      }
+      Navigator.of(ctx).pop();
+    }
+
+    if (isComputer) {
+      await showDialog<void>(
+        context: context,
+        builder: (ctx) => StatefulBuilder(
+          builder: (ctx, setS) => AlertDialog(
+            title: Text(isEditing ? 'Edit Article' : 'Add Article'),
+            content: SizedBox(width: 480, child: SingleChildScrollView(child: formFields(setS))),
+            actions: [
+              TextButton(onPressed: () => Navigator.of(ctx).pop(), child: const Text('Cancel')),
+              ElevatedButton.icon(
+                onPressed: () => save(ctx),
+                style: ElevatedButton.styleFrom(backgroundColor: AppColors.brand, foregroundColor: Colors.white),
+                icon: const Icon(Icons.save_outlined),
+                label: Text(isEditing ? 'Update' : 'Save'),
+              ),
+            ],
+          ),
+        ),
+      );
+    } else {
+      await showModalBottomSheet<void>(
+        context: context,
+        isScrollControlled: true,
+        showDragHandle: true,
+        builder: (ctx) => StatefulBuilder(
+          builder: (ctx, setS) => Padding(
+            padding: EdgeInsets.fromLTRB(16, 8, 16, MediaQuery.of(ctx).viewInsets.bottom + 16),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(isEditing ? 'Edit Article' : 'Add Article',
+                      style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w700)),
+                  const SizedBox(height: 12),
+                  formFields(setS),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () => save(ctx),
+                      style: ElevatedButton.styleFrom(backgroundColor: AppColors.brand, foregroundColor: Colors.white),
+                      icon: const Icon(Icons.save_outlined),
+                      label: Text(isEditing ? 'Update article' : 'Save article'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    titleCtrl.dispose();
+    authorCtrl.dispose();
+    summaryCtrl.dispose();
+    contentCtrl.dispose();
+  }
+
+  HelpHerArticle? _buildArticle({
+    String? id,
+    required String title,
+    required String author,
+    required String category,
+    required String summary,
+    required String content,
+  }) {
+    final t = title.trim(); final a = author.trim();
+    final s = summary.trim(); final c = content.trim();
+    if (t.isEmpty || a.isEmpty || s.isEmpty || c.isEmpty) return null;
+    final words = c.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).length;
+    final readTime = '${(words / 180).ceil().clamp(1, 30)} min';
+    final IconData icon;
+    final Color accent;
+    switch (category) {
+      case 'Legal':
+        icon = Icons.gavel_outlined;
+        accent = const Color(0xFFEDE7F6);
+      case 'Community':
+        icon = Icons.people_alt_outlined;
+        accent = const Color(0xFFE8F5E9);
+      default:
+        icon = Icons.shield_outlined;
+        accent = const Color(0xFFFFEBEE);
+    }
+    return HelpHerArticle(
+      id: id ?? 'user-${DateTime.now().microsecondsSinceEpoch}',
+      title: t, author: a, readTime: readTime,
+      category: category, summary: s, content: c,
+      icon: icon, accent: accent,
+    );
   }
 
   String _publicAuthorName(String storedAuthor, Map<String, dynamic>? data) {
@@ -851,65 +1038,114 @@ class _CommunityScreenState extends State<CommunityScreen>
         }
         final docs = snapshot.data!.docs;
         if (docs.isEmpty) {
-          return const Center(
-            child: Text(
-              'No articles yet.',
-              style: TextStyle(color: AppColors.text2),
-            ),
+          return Column(
+            children: [
+              if (widget.canManageArticles) _buildAddArticleButton(),
+              const Expanded(
+                child: Center(
+                  child: Text('No articles yet.', style: TextStyle(color: AppColors.text2)),
+                ),
+              ),
+            ],
           );
         }
         final articles = docs
             .map((doc) => HelpHerArticle.fromFirestoreData(doc.id, doc.data()))
             .toList();
 
-        Widget cardFor(HelpHerArticle article) => ArticleCard(
-              title: article.title,
-              author: article.author,
-              readTime: article.readTime,
-              color: article.accent,
-              icon: article.icon,
-              onTap: () => Navigator.of(context).push(
-                buildSlideRoute<void>(
-                  page: ArticleDetailScreen(
-                    article: article,
-                    currentUserUid: widget.currentUserUid,
-                    currentUserName: widget.currentUserName,
-                  ),
+        Widget cardFor(HelpHerArticle article) {
+          final card = ArticleCard(
+            title: article.title,
+            author: article.author,
+            readTime: article.readTime,
+            color: article.accent,
+            icon: article.icon,
+            onTap: () => Navigator.of(context).push(
+              buildSlideRoute<void>(
+                page: ArticleDetailScreen(
+                  article: article,
+                  currentUserUid: widget.currentUserUid,
+                  currentUserName: widget.currentUserName,
                 ),
               ),
-            );
+            ),
+          );
+          if (!widget.canManageArticles) return card;
+          return Stack(
+            children: [
+              card,
+              Positioned(
+                top: 6,
+                right: 6,
+                child: PopupMenuButton<String>(
+                  onSelected: (v) {
+                    if (v == 'edit') _openArticleSheet(existing: article);
+                    if (v == 'delete') widget.onArticleDeleted(article.id);
+                  },
+                  icon: const Icon(Icons.more_horiz, color: AppColors.text2),
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(value: 'edit', child: Text('Edit')),
+                    PopupMenuItem(value: 'delete', child: Text('Delete')),
+                  ],
+                ),
+              ),
+            ],
+          );
+        }
 
         if (isComputer) {
-          // Two-column grid on desktop
           final rows = <Widget>[];
           for (var i = 0; i < articles.length; i += 2) {
-            rows.add(
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(child: cardFor(articles[i])),
-                  if (i + 1 < articles.length)
-                    Expanded(child: cardFor(articles[i + 1]))
-                  else
-                    const Expanded(child: SizedBox()),
-                ],
-              ),
-            );
+            rows.add(Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(child: cardFor(articles[i])),
+                if (i + 1 < articles.length)
+                  Expanded(child: cardFor(articles[i + 1]))
+                else
+                  const Expanded(child: SizedBox()),
+              ],
+            ));
           }
           return SingleChildScrollView(
             padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-            child: Column(children: rows),
+            child: Column(
+              children: [
+                if (widget.canManageArticles) _buildAddArticleButton(),
+                ...rows,
+              ],
+            ),
           );
         }
 
         return ListView.builder(
           padding: const EdgeInsets.symmetric(vertical: 8),
-          itemCount: articles.length,
-          itemBuilder: (_, i) => cardFor(articles[i]),
+          itemCount: articles.length + (widget.canManageArticles ? 1 : 0),
+          itemBuilder: (_, i) {
+            if (widget.canManageArticles && i == 0) return _buildAddArticleButton();
+            final article = articles[widget.canManageArticles ? i - 1 : i];
+            return cardFor(article);
+          },
         );
       },
     );
   }
+
+  Widget _buildAddArticleButton() => Padding(
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
+        child: Align(
+          alignment: Alignment.centerRight,
+          child: FilledButton.icon(
+            onPressed: () => _openArticleSheet(),
+            style: FilledButton.styleFrom(
+              backgroundColor: AppColors.brand,
+              foregroundColor: Colors.white,
+            ),
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text('Add Article'),
+          ),
+        ),
+      );
 
   @override
   Widget build(BuildContext context) {

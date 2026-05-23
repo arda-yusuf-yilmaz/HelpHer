@@ -32,12 +32,10 @@ class HomeScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isComputer = isComputerPlatform(Theme.of(context).platform);
     return SingleChildScrollView(
       child: Column(
         children: [
           _buildHeader(),
-          if (isComputer) _buildLandingBanner(context),
           _buildSectionTitle('Quick Functions', top: 20),
           _buildQuickActions(context),
           _buildSectionTitle('Featured Articles'),
@@ -60,70 +58,6 @@ class HomeScreen extends StatelessWidget {
                 );
               },
             ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildLandingBanner(BuildContext context) {
-    return Container(
-      margin: const EdgeInsets.fromLTRB(16, 16, 16, 0),
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: Colors.black12),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
-            children: [
-              Icon(Icons.shield_outlined, color: AppColors.brand),
-              SizedBox(width: 8),
-              Text(
-                'Safety Dashboard',
-                style: TextStyle(
-                  fontSize: 16,
-                  fontWeight: FontWeight.w700,
-                  color: AppColors.text,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 10),
-          const Text(
-            'Need help right now? Open Emergency SOS for instant support and trusted contacts.',
-            style: TextStyle(color: AppColors.text2, height: 1.35),
-          ),
-          const SizedBox(height: 14),
-          Row(
-            children: [
-              Expanded(
-                child: ElevatedButton.icon(
-                  onPressed: onOpenSafety,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.brand,
-                    foregroundColor: Colors.white,
-                    elevation: 0,
-                    padding: const EdgeInsets.symmetric(vertical: 12),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                  icon: const Icon(Icons.warning_amber_rounded),
-                  label: const Text('Open Emergency SOS'),
-                ),
-              ),
-              const SizedBox(width: 10),
-              IconButton.filledTonal(
-                onPressed: onOpenCommunity,
-                icon: const Icon(Icons.forum_outlined),
-                tooltip: 'Open community',
-              ),
-            ],
           ),
         ],
       ),
