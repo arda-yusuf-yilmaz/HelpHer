@@ -102,7 +102,8 @@ class _CommunityScreenState extends State<CommunityScreen>
       final postRef = await _postsCollection.add({
         'author': widget.currentUserName,
         'authorUid': widget.currentUserUid,
-        'authorPhotoUrl': widget.currentUserPhotoUrl,
+        if (widget.currentUserPhotoUrl != null)
+          'authorPhotoUrl': widget.currentUserPhotoUrl,
         'role': 'Member',
         'content': content,
         'tag': selectedTag,
