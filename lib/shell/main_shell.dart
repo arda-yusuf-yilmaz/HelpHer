@@ -21,6 +21,7 @@ import '../screens/emergency/emergency_screen.dart';
 import '../screens/profile/profile_screen.dart';
 import '../screens/articles/articles_screen.dart';
 import '../screens/notifications/notifications_screen.dart';
+import '../widgets/desktop_sidebar.dart';
 
 class MainShell extends StatefulWidget {
   final String initialUserName;
@@ -1140,156 +1141,51 @@ class _MainShellState extends State<MainShell>
                 );
 
                 final isComputer = isComputerPlatform(Theme.of(context).platform);
-                final isWideComputer =
-                    isComputer && MediaQuery.of(context).size.width >= 980;
 
-                Widget buildContent({required bool constrain}) {
-                  final content = AnimatedBuilder(
-                    animation: _tabEntranceController,
-                    child: PageView(
-                      controller: _pageController,
-                      physics: isComputer
-                          ? const NeverScrollableScrollPhysics()
-                          : const ClampingScrollPhysics(),
-                      onPageChanged: (index) {
-                        if (_currentIndex != index) {
-                          setState(() => _currentIndex = index);
-                        }
-                      },
-                      children: screens,
-                    ),
-                    builder: (context, child) {
-                      final progress = _tabEntranceController.value;
-                      final offsetX = (1 - progress) * 34 * _tabSlideDirection;
-                      return Opacity(
-                        opacity: 0.9 + (progress * 0.1),
-                        child: Transform.translate(
-                          offset: Offset(offsetX, 0),
-                          child: child,
-                        ),
-                      );
+                final pageView = AnimatedBuilder(
+                  animation: _tabEntranceController,
+                  child: PageView(
+                    controller: _pageController,
+                    physics: isComputer
+                        ? const NeverScrollableScrollPhysics()
+                        : const ClampingScrollPhysics(),
+                    onPageChanged: (index) {
+                      if (_currentIndex != index) {
+                        setState(() => _currentIndex = index);
+                      }
                     },
-                  );
-
-                  if (!constrain) {
-                    return content;
-                  }
-
-                  return Center(
-                    child: ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 1120),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 20),
-                        child: content,
+                    children: screens,
+                  ),
+                  builder: (context, child) {
+                    final progress = _tabEntranceController.value;
+                    final offsetX = (1 - progress) * 34 * _tabSlideDirection;
+                    return Opacity(
+                      opacity: 0.9 + (progress * 0.1),
+                      child: Transform.translate(
+                        offset: Offset(offsetX, 0),
+                        child: child,
                       ),
-                    ),
-                  );
-                }
-
-                NavigationRailDestination railDestination({
-                  required IconData icon,
-                  required IconData selectedIcon,
-                  required String label,
-                  Widget? badge,
-                }) {
-                  final baseIcon = Icon(icon);
-                  final baseSelectedIcon = Icon(selectedIcon);
-                  Widget withBadge(Widget iconWidget) {
-                    if (badge == null) return iconWidget;
-                    return Stack(
-                      clipBehavior: Clip.none,
-                      children: [
-                        iconWidget,
-                        Positioned(right: -6, top: -4, child: badge),
-                      ],
                     );
-                  }
-
-                  return NavigationRailDestination(
-                    icon: withBadge(baseIcon),
-                    selectedIcon: withBadge(baseSelectedIcon),
-                    label: Text(label),
-                  );
-                }
-
-                final chatBadge = unreadChatsCount > 0
-                    ? Container(
-                        constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
-                        padding: const EdgeInsets.symmetric(horizontal: 4),
-                        decoration: BoxDecoration(
-                          color: AppColors.brand,
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Text(
-                          unreadChatsCount > 9 ? '9+' : '$unreadChatsCount',
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                      )
-                    : null;
+                  },
+                );
 
                 return Scaffold(
-                  body: isWideComputer
+                  body: isComputer
                       ? Row(
                           children: [
-                            NavigationRail(
+                            DesktopSidebar(
                               selectedIndex: _currentIndex,
                               onDestinationSelected: (index) =>
                                   _switchTab(index, animated: true),
-                              labelType: NavigationRailLabelType.all,
-                              backgroundColor: Colors.white,
-                              selectedIconTheme: const IconThemeData(
-                                color: AppColors.brand,
-                              ),
-                              selectedLabelTextStyle: const TextStyle(
-                                color: AppColors.brand,
-                                fontWeight: FontWeight.w700,
-                              ),
-                              unselectedIconTheme: const IconThemeData(
-                                color: AppColors.text2,
-                              ),
-                              unselectedLabelTextStyle: const TextStyle(
-                                color: AppColors.text2,
-                              ),
-                              destinations: [
-                                railDestination(
-                                  icon: Icons.home_outlined,
-                                  selectedIcon: Icons.home,
-                                  label: 'Home',
-                                ),
-                                railDestination(
-                                  icon: Icons.people_outline,
-                                  selectedIcon: Icons.people,
-                                  label: 'Community',
-                                ),
-                                railDestination(
-                                  icon: Icons.chat_bubble_outline,
-                                  selectedIcon: Icons.chat_bubble,
-                                  label: 'Chats',
-                                  badge: chatBadge,
-                                ),
-                                railDestination(
-                                  icon: Icons.bolt,
-                                  selectedIcon: Icons.bolt,
-                                  label: 'Safety',
-                                ),
-                                railDestination(
-                                  icon: Icons.person_outline,
-                                  selectedIcon: Icons.person,
-                                  label: 'Profile',
-                                ),
-                              ],
+                              profile: _profile,
+                              unreadChatsCount: unreadChatsCount,
                             ),
                             const VerticalDivider(width: 1, thickness: 1),
-                            Expanded(child: buildContent(constrain: true)),
+                            Expanded(child: pageView),
                           ],
                         )
-                      : buildContent(constrain: isComputer),
-                  bottomNavigationBar: (isWideComputer)
+                      : pageView,
+                  bottomNavigationBar: isComputer
                       ? null
                       : (isIOS
                           ? Theme(
