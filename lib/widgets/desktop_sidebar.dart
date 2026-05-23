@@ -3,7 +3,10 @@ import '../app.dart';
 import '../models/user_profile.dart';
 import 'profile_initials_avatar.dart';
 
-class DesktopSidebar extends StatelessWidget {
+// Hover color: just barely darker than the sidebar bg, same warm tone.
+const _kHoverBg = Color(0xFFF2EDEF);
+
+class DesktopSidebar extends StatefulWidget {
   final int selectedIndex;
   final ValueChanged<int> onDestinationSelected;
   final UserProfileData profile;
@@ -17,13 +20,21 @@ class DesktopSidebar extends StatelessWidget {
     this.unreadChatsCount = 0,
   });
 
+  @override
+  State<DesktopSidebar> createState() => _DesktopSidebarState();
+}
+
+class _DesktopSidebarState extends State<DesktopSidebar> {
+  // -1 = nothing hovered, 0-4 = nav items, 5 = footer
+  int _hoveredIndex = -1;
+
   static const _sidebarBg = Color(0xFFF9F5F6);
 
   @override
   Widget build(BuildContext context) {
-    final displayName = profile.username != null
-        ? '@${profile.username}'
-        : profile.name;
+    final displayName = widget.profile.username != null
+        ? '@${widget.profile.username}'
+        : widget.profile.name;
 
     return Container(
       width: 220,
@@ -70,49 +81,61 @@ class DesktopSidebar extends StatelessWidget {
             selectedIcon: Icons.home_rounded,
             label: 'Home',
             index: 0,
-            selected: selectedIndex == 0,
-            onTap: onDestinationSelected,
+            selected: widget.selectedIndex == 0,
+            hovered: _hoveredIndex == 0,
+            onTap: widget.onDestinationSelected,
+            onHoverChanged: (v) => setState(() => _hoveredIndex = v ? 0 : -1),
           ),
           _SidebarItem(
             icon: Icons.people_outline,
             selectedIcon: Icons.people_rounded,
             label: 'Community',
             index: 1,
-            selected: selectedIndex == 1,
-            onTap: onDestinationSelected,
+            selected: widget.selectedIndex == 1,
+            hovered: _hoveredIndex == 1,
+            onTap: widget.onDestinationSelected,
+            onHoverChanged: (v) => setState(() => _hoveredIndex = v ? 1 : -1),
           ),
           _SidebarItem(
             icon: Icons.chat_bubble_outline_rounded,
             selectedIcon: Icons.chat_bubble_rounded,
             label: 'Chats',
             index: 2,
-            selected: selectedIndex == 2,
-            onTap: onDestinationSelected,
-            badge: unreadChatsCount,
+            selected: widget.selectedIndex == 2,
+            hovered: _hoveredIndex == 2,
+            onTap: widget.onDestinationSelected,
+            onHoverChanged: (v) => setState(() => _hoveredIndex = v ? 2 : -1),
+            badge: widget.unreadChatsCount,
           ),
           _SidebarItem(
             icon: Icons.shield_outlined,
             selectedIcon: Icons.shield_rounded,
             label: 'Safety',
             index: 3,
-            selected: selectedIndex == 3,
-            onTap: onDestinationSelected,
+            selected: widget.selectedIndex == 3,
+            hovered: _hoveredIndex == 3,
+            onTap: widget.onDestinationSelected,
+            onHoverChanged: (v) => setState(() => _hoveredIndex = v ? 3 : -1),
           ),
           _SidebarItem(
             icon: Icons.person_outline_rounded,
             selectedIcon: Icons.person_rounded,
             label: 'Profile',
             index: 4,
-            selected: selectedIndex == 4,
-            onTap: onDestinationSelected,
+            selected: widget.selectedIndex == 4,
+            hovered: _hoveredIndex == 4,
+            onTap: widget.onDestinationSelected,
+            onHoverChanged: (v) => setState(() => _hoveredIndex = v ? 4 : -1),
           ),
           const Spacer(),
           // ── User footer ────────────────────────────────────────────────
           const _Divider(),
           _UserFooter(
-            profile: profile,
+            profile: widget.profile,
             displayName: displayName,
-            onTap: () => onDestinationSelected(4),
+            hovered: _hoveredIndex == 5,
+            onHoverChanged: (v) => setState(() => _hoveredIndex = v ? 5 : -1),
+            onTap: () => widget.onDestinationSelected(4),
           ),
         ],
       ),
@@ -133,13 +156,15 @@ class _Divider extends StatelessWidget {
 
 // ── Nav item ──────────────────────────────────────────────────────────────────
 
-class _SidebarItem extends StatefulWidget {
+class _SidebarItem extends StatelessWidget {
   final IconData icon;
   final IconData selectedIcon;
   final String label;
   final int index;
   final bool selected;
+  final bool hovered;
   final ValueChanged<int> onTap;
+  final ValueChanged<bool> onHoverChanged;
   final int badge;
 
   const _SidebarItem({
@@ -148,16 +173,11 @@ class _SidebarItem extends StatefulWidget {
     required this.label,
     required this.index,
     required this.selected,
+    required this.hovered,
     required this.onTap,
+    required this.onHoverChanged,
     this.badge = 0,
   });
-
-  @override
-  State<_SidebarItem> createState() => _SidebarItemState();
-}
-
-class _SidebarItemState extends State<_SidebarItem> {
-  bool _hovered = false;
 
   @override
   Widget build(BuildContext context) {
@@ -165,14 +185,14 @@ class _SidebarItemState extends State<_SidebarItem> {
     final Color labelColor;
     final Color bg;
 
-    if (widget.selected) {
+    if (selected) {
       iconColor = AppColors.brand;
       labelColor = AppColors.brand;
       bg = AppColors.brandLight;
-    } else if (_hovered) {
+    } else if (hovered) {
       iconColor = AppColors.text;
       labelColor = AppColors.text;
-      bg = const Color(0xFFEFEBEC);
+      bg = _kHoverBg;
     } else {
       iconColor = AppColors.text2;
       labelColor = AppColors.text2;
@@ -182,11 +202,11 @@ class _SidebarItemState extends State<_SidebarItem> {
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 2),
       child: MouseRegion(
-        onEnter: (_) => setState(() => _hovered = true),
-        onExit: (_) => setState(() => _hovered = false),
+        onEnter: (_) => onHoverChanged(true),
+        onExit: (_) => onHoverChanged(false),
         cursor: SystemMouseCursors.click,
         child: GestureDetector(
-          onTap: () => widget.onTap(widget.index),
+          onTap: () => onTap(index),
           child: AnimatedContainer(
             duration: const Duration(milliseconds: 120),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -197,24 +217,23 @@ class _SidebarItemState extends State<_SidebarItem> {
             child: Row(
               children: [
                 Icon(
-                  widget.selected ? widget.selectedIcon : widget.icon,
+                  selected ? selectedIcon : icon,
                   size: 20,
                   color: iconColor,
                 ),
                 const SizedBox(width: 11),
                 Expanded(
                   child: Text(
-                    widget.label,
+                    label,
                     style: TextStyle(
                       fontSize: 14,
-                      fontWeight: widget.selected
-                          ? FontWeight.w600
-                          : FontWeight.w400,
+                      fontWeight:
+                          selected ? FontWeight.w600 : FontWeight.w400,
                       color: labelColor,
                     ),
                   ),
                 ),
-                if (widget.badge > 0)
+                if (badge > 0)
                   Container(
                     constraints: const BoxConstraints(
                       minWidth: 18,
@@ -226,7 +245,7 @@ class _SidebarItemState extends State<_SidebarItem> {
                       borderRadius: BorderRadius.circular(9),
                     ),
                     child: Text(
-                      widget.badge > 9 ? '9+' : '${widget.badge}',
+                      badge > 9 ? '9+' : '$badge',
                       textAlign: TextAlign.center,
                       style: const TextStyle(
                         color: Colors.white,
@@ -246,35 +265,32 @@ class _SidebarItemState extends State<_SidebarItem> {
 
 // ── User footer ───────────────────────────────────────────────────────────────
 
-class _UserFooter extends StatefulWidget {
+class _UserFooter extends StatelessWidget {
   final UserProfileData profile;
   final String displayName;
+  final bool hovered;
+  final ValueChanged<bool> onHoverChanged;
   final VoidCallback onTap;
 
   const _UserFooter({
     required this.profile,
     required this.displayName,
+    required this.hovered,
+    required this.onHoverChanged,
     required this.onTap,
   });
 
   @override
-  State<_UserFooter> createState() => _UserFooterState();
-}
-
-class _UserFooterState extends State<_UserFooter> {
-  bool _hovered = false;
-
-  @override
   Widget build(BuildContext context) {
     return MouseRegion(
-      onEnter: (_) => setState(() => _hovered = true),
-      onExit: (_) => setState(() => _hovered = false),
+      onEnter: (_) => onHoverChanged(true),
+      onExit: (_) => onHoverChanged(false),
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
-        onTap: widget.onTap,
+        onTap: onTap,
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 120),
-          color: _hovered ? const Color(0xFFEFEBEC) : Colors.transparent,
+          color: hovered ? _kHoverBg : Colors.transparent,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           child: Row(
             children: [
@@ -282,17 +298,18 @@ class _UserFooterState extends State<_UserFooter> {
                 width: 34,
                 height: 34,
                 child: ClipOval(
-                  child: widget.profile.photoUrl != null
+                  child: profile.photoUrl != null
                       ? Image.network(
-                          widget.profile.photoUrl!,
+                          profile.photoUrl!,
                           fit: BoxFit.cover,
-                          errorBuilder: (context, error, stack) => ProfileInitialsAvatar(
-                            name: widget.displayName,
+                          errorBuilder: (context, error, stack) =>
+                              ProfileInitialsAvatar(
+                            name: displayName,
                             fontSize: 13,
                           ),
                         )
                       : ProfileInitialsAvatar(
-                          name: widget.displayName,
+                          name: displayName,
                           fontSize: 13,
                         ),
                 ),
@@ -304,7 +321,7 @@ class _UserFooterState extends State<_UserFooter> {
                   mainAxisSize: MainAxisSize.min,
                   children: [
                     Text(
-                      widget.displayName,
+                      displayName,
                       style: const TextStyle(
                         fontWeight: FontWeight.w600,
                         fontSize: 13,
@@ -312,9 +329,9 @@ class _UserFooterState extends State<_UserFooter> {
                       ),
                       overflow: TextOverflow.ellipsis,
                     ),
-                    if (widget.profile.username != null)
+                    if (profile.username != null)
                       Text(
-                        widget.profile.name,
+                        profile.name,
                         style: const TextStyle(
                           fontSize: 11,
                           color: AppColors.text2,
