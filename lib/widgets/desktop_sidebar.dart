@@ -3,8 +3,7 @@ import '../app.dart';
 import '../models/user_profile.dart';
 import 'profile_initials_avatar.dart';
 
-// Hover color: just barely darker than the sidebar bg, same warm tone.
-const _kHoverBg = Color(0xFFF2EDEF);
+const _kHoverBg = Color(0xFFEFEBEC);
 
 class DesktopSidebar extends StatefulWidget {
   final int selectedIndex;
@@ -207,8 +206,7 @@ class _SidebarItem extends StatelessWidget {
         cursor: SystemMouseCursors.click,
         child: GestureDetector(
           onTap: () => onTap(index),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 120),
+          child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
             decoration: BoxDecoration(
               color: bg,
@@ -288,8 +286,7 @@ class _UserFooter extends StatelessWidget {
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
         onTap: onTap,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 120),
+        child: Container(
           color: hovered ? _kHoverBg : Colors.transparent,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           child: Row(
