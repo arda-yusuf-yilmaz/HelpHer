@@ -449,64 +449,96 @@ class _ProfileScreenState extends State<ProfileScreen> {
             'Profile',
             style: TextStyle(fontSize: 28, fontWeight: FontWeight.w700),
           ),
-          const SizedBox(height: 16),
-          Center(
-            child: Column(
-              children: [
-                Container(
-                  width: 136,
-                  height: 136,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    color: AppColors.brandLight,
-                    border: Border.all(color: Colors.white, width: 4),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Color(0x1A000000),
-                        blurRadius: 16,
-                        offset: Offset(0, 8),
+          const SizedBox(height: 20),
+          // ── Avatar row ──────────────────────────────────────────────────
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Container(
+                width: 80,
+                height: 80,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: AppColors.brandLight,
+                  border: Border.all(color: Colors.white, width: 3),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: Color(0x1A000000),
+                      blurRadius: 12,
+                      offset: Offset(0, 6),
+                    ),
+                  ],
+                ),
+                clipBehavior: Clip.antiAlias,
+                child: widget.profile.photoUrl != null &&
+                        widget.profile.photoUrl!.isNotEmpty
+                    ? Image.network(
+                        widget.profile.photoUrl!,
+                        fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) =>
+                            ProfileInitialsAvatar(
+                          name: widget.profile.name,
+                          fontSize: 26,
+                        ),
+                      )
+                    : ProfileInitialsAvatar(
+                        name: widget.profile.name,
+                        fontSize: 26,
+                      ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      widget.profile.name,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.text,
+                      ),
+                    ),
+                    if (widget.profile.username != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        '@${widget.profile.username}',
+                        style: const TextStyle(
+                          fontSize: 13,
+                          color: AppColors.brand,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
                     ],
-                  ),
-                  clipBehavior: Clip.antiAlias,
-                  child:
-                      widget.profile.photoUrl != null &&
-                          widget.profile.photoUrl!.isNotEmpty
-                      ? Image.network(
-                          widget.profile.photoUrl!,
-                          fit: BoxFit.cover,
-                          errorBuilder: (context, error, stackTrace) {
-                            return ProfileInitialsAvatar(
-                              name: widget.profile.name,
-                              fontSize: 36,
-                            );
-                          },
-                        )
-                      : ProfileInitialsAvatar(
-                          name: widget.profile.name,
-                          fontSize: 36,
+                    const SizedBox(height: 10),
+                    OutlinedButton.icon(
+                      onPressed:
+                          _isUploadingPhoto ? null : _pickAndUploadPhoto,
+                      style: OutlinedButton.styleFrom(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 6,
                         ),
+                        textStyle: const TextStyle(fontSize: 13),
+                        visualDensity: VisualDensity.compact,
+                      ),
+                      icon: _isUploadingPhoto
+                          ? const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(strokeWidth: 2),
+                            )
+                          : const Icon(Icons.photo_camera_outlined, size: 16),
+                      label: Text(
+                        _isUploadingPhoto ? 'Uploading…' : 'Change photo',
+                      ),
+                    ),
+                  ],
                 ),
-                const SizedBox(height: 14),
-                OutlinedButton.icon(
-                  onPressed: _isUploadingPhoto ? null : _pickAndUploadPhoto,
-                  icon: _isUploadingPhoto
-                      ? const SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(strokeWidth: 2),
-                        )
-                      : const Icon(Icons.photo_camera_outlined),
-                  label: Text(
-                    _isUploadingPhoto
-                        ? 'Uploading...'
-                        : 'Change profile picture',
-                  ),
-                ),
-              ],
-            ),
+              ),
+            ],
           ),
-          const SizedBox(height: 14),
+          const SizedBox(height: 20),
           TextField(
             controller: _nameController,
             textInputAction: TextInputAction.done,

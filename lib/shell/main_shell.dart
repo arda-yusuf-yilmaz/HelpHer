@@ -149,7 +149,11 @@ class _MainShellState extends State<MainShell>
     setState(() => _currentIndex = index);
     final distance = (index - previousIndex).abs();
     _tabSlideDirection = index > previousIndex ? 1 : -1;
-    if (animated && distance == 1) {
+    // Desktop uses the entrance-controller animation (vertical slide) for every
+    // transition.  Mobile keeps the PageView's built-in horizontal scroll for
+    // adjacent tabs so the swipe physics feel native.
+    final isComputer = isComputerPlatform(Theme.of(context).platform);
+    if (animated && distance == 1 && !isComputer) {
       _tabEntranceController.value = 1;
       _pageController.animateToPage(
         index,
@@ -159,7 +163,7 @@ class _MainShellState extends State<MainShell>
       return;
     }
     _pageController.jumpToPage(index);
-    if (animated && distance > 1) {
+    if (animated) {
       _tabEntranceController
         ..value = 0
         ..forward();
@@ -879,18 +883,40 @@ class _MainShellState extends State<MainShell>
     BuildContext context,
     List<AppNotificationItem> notifications,
   ) async {
-    await Navigator.of(context).push(
-      buildSlideRoute<void>(
-        beginOffset: const Offset(0, 1),
-        withDimOverlay: true,
-        page: NotificationsScreen(
-          notifications: notifications,
-          onMarkRead: _markNotificationRead,
-          onMarkAllRead: _markAllNotificationsRead,
-          onDelete: _deleteNotification,
-          onRestore: _restoreNotification,
+    await showGeneralDialog<void>(
+      context: context,
+      barrierDismissible: true,
+      barrierLabel: MaterialLocalizations.of(context).modalBarrierDismissLabel,
+      // Dark overlay on the left half.
+      barrierColor: Colors.black.withValues(alpha: 0.45),
+      transitionDuration: const Duration(milliseconds: 280),
+      // The panel occupies the right half at full height.
+      pageBuilder: (ctx, _, _) => Align(
+        alignment: Alignment.centerRight,
+        child: FractionallySizedBox(
+          widthFactor: 0.5,
+          heightFactor: 1.0,
+          child: NotificationsScreen(
+            notifications: notifications,
+            onMarkRead: _markNotificationRead,
+            onMarkAllRead: _markAllNotificationsRead,
+            onDelete: _deleteNotification,
+            onRestore: _restoreNotification,
+          ),
         ),
       ),
+      // Slide in from the right.
+      transitionBuilder: (ctx, animation, _, child) {
+        return SlideTransition(
+          position: Tween<Offset>(
+            begin: const Offset(1, 0),
+            end: Offset.zero,
+          ).animate(
+            CurvedAnimation(parent: animation, curve: Curves.easeOutCubic),
+          ),
+          child: child,
+        );
+      },
     );
   }
 
@@ -1113,6 +1139,7 @@ class _MainShellState extends State<MainShell>
                                     color: Colors.white,
                                     fontSize: 9,
                                     fontWeight: FontWeight.w700,
+                                    height: 1.0,
                                   ),
                                 ),
                               ),
@@ -1150,11 +1177,16 @@ class _MainShellState extends State<MainShell>
                   ),
                   builder: (context, child) {
                     final progress = _tabEntranceController.value;
-                    final offsetX = (1 - progress) * 34 * _tabSlideDirection;
+                    final delta = (1 - progress) * 34 * _tabSlideDirection;
                     return Opacity(
                       opacity: 0.9 + (progress * 0.1),
                       child: Transform.translate(
-                        offset: Offset(offsetX, 0),
+                        // Desktop: slide vertically (down→up when going to a
+                        // higher index, up→down for a lower index).
+                        // Mobile: keep the horizontal slide.
+                        offset: isComputer
+                            ? Offset(0, delta)
+                            : Offset(delta, 0),
                         child: child,
                       ),
                     );

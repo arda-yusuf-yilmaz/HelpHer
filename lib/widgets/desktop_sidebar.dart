@@ -1,7 +1,13 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:window_manager/window_manager.dart';
 import '../app.dart';
 import '../models/user_profile.dart';
 import 'profile_initials_avatar.dart';
+
+// Extra top padding on macOS so the HelpHer branding clears the traffic-light
+// buttons, which sit at ≈ y 8–24 pt from the top of the window.
+const double _kMacTrafficLightClearance = 38.0;
 
 const _kHoverBg = Color(0xFFEFEBEC);
 
@@ -24,7 +30,7 @@ class DesktopSidebar extends StatefulWidget {
 }
 
 class _DesktopSidebarState extends State<DesktopSidebar> {
-  // -1 = nothing hovered, 0-4 = nav items, 5 = footer
+  // -1 = nothing hovered, 0-3 = nav items, 5 = footer
   int _hoveredIndex = -1;
 
   static const _sidebarBg = Color(0xFFF9F5F6);
@@ -41,35 +47,53 @@ class _DesktopSidebarState extends State<DesktopSidebar> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          // ── App branding ───────────────────────────────────────────────
-          Padding(
-            padding: const EdgeInsets.fromLTRB(18, 22, 18, 18),
-            child: Row(
-              children: [
-                Container(
-                  width: 34,
-                  height: 34,
-                  decoration: BoxDecoration(
-                    color: AppColors.brand,
-                    borderRadius: BorderRadius.circular(9),
+          // ── App branding (also the window drag zone) ───────────────────
+          DragToMoveArea(
+            child: Padding(
+              padding: EdgeInsets.fromLTRB(
+                18,
+                // On macOS the traffic-light buttons overlap the top-left of
+                // the sidebar; push the branding below them.
+                (!kIsWeb && defaultTargetPlatform == TargetPlatform.macOS)
+                    ? _kMacTrafficLightClearance
+                    : 22,
+                18,
+                18,
+              ),
+              child: Row(
+                children: [
+                  Container(
+                    width: 34,
+                    height: 34,
+                    decoration: BoxDecoration(
+                      color: AppColors.brand,
+                      borderRadius: BorderRadius.circular(9),
+                    ),
+                    child: const Icon(
+                      Icons.favorite_rounded,
+                      color: Colors.white,
+                      size: 18,
+                    ),
                   ),
-                  child: const Icon(
-                    Icons.favorite_rounded,
-                    color: Colors.white,
-                    size: 18,
+                  const SizedBox(width: 10),
+                  const Expanded(
+                    child: Text(
+                      'HelpHer',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.text,
+                        letterSpacing: -0.3,
+                      ),
+                    ),
                   ),
-                ),
-                const SizedBox(width: 10),
-                const Text(
-                  'HelpHer',
-                  style: TextStyle(
-                    fontSize: 17,
-                    fontWeight: FontWeight.w700,
-                    color: AppColors.text,
-                    letterSpacing: -0.3,
-                  ),
-                ),
-              ],
+                  // Windows: render min / max / close since the system title
+                  // bar is hidden.
+                  if (!kIsWeb &&
+                      defaultTargetPlatform == TargetPlatform.windows)
+                    const _WindowsControls(),
+                ],
+              ),
             ),
           ),
           const _Divider(),
@@ -116,22 +140,13 @@ class _DesktopSidebarState extends State<DesktopSidebar> {
             onTap: widget.onDestinationSelected,
             onHoverChanged: (v) => setState(() => _hoveredIndex = v ? 3 : -1),
           ),
-          _SidebarItem(
-            icon: Icons.person_outline_rounded,
-            selectedIcon: Icons.person_rounded,
-            label: 'Profile',
-            index: 4,
-            selected: widget.selectedIndex == 4,
-            hovered: _hoveredIndex == 4,
-            onTap: widget.onDestinationSelected,
-            onHoverChanged: (v) => setState(() => _hoveredIndex = v ? 4 : -1),
-          ),
           const Spacer(),
-          // ── User footer ────────────────────────────────────────────────
+          // ── User footer (also navigates to Profile) ────────────────────
           const _Divider(),
           _UserFooter(
             profile: widget.profile,
             displayName: displayName,
+            selected: widget.selectedIndex == 4,
             hovered: _hoveredIndex == 5,
             onHoverChanged: (v) => setState(() => _hoveredIndex = v ? 5 : -1),
             onTap: () => widget.onDestinationSelected(4),
@@ -249,6 +264,7 @@ class _SidebarItem extends StatelessWidget {
                         color: Colors.white,
                         fontSize: 10,
                         fontWeight: FontWeight.w700,
+                        height: 1.0,
                       ),
                     ),
                   ),
@@ -261,11 +277,98 @@ class _SidebarItem extends StatelessWidget {
   }
 }
 
+// ── Windows caption controls ──────────────────────────────────────────────────
+
+class _WindowsControls extends StatelessWidget {
+  const _WindowsControls();
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        _WinBtn(
+          icon: Icons.remove,
+          tooltip: 'Minimise',
+          onTap: () => windowManager.minimize(),
+        ),
+        _WinBtn(
+          icon: Icons.crop_square_outlined,
+          tooltip: 'Maximise',
+          onTap: () async {
+            if (await windowManager.isMaximized()) {
+              await windowManager.unmaximize();
+            } else {
+              await windowManager.maximize();
+            }
+          },
+        ),
+        _WinBtn(
+          icon: Icons.close,
+          tooltip: 'Close',
+          onTap: () => windowManager.close(),
+          isClose: true,
+        ),
+      ],
+    );
+  }
+}
+
+class _WinBtn extends StatefulWidget {
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onTap;
+  final bool isClose;
+
+  const _WinBtn({
+    required this.icon,
+    required this.tooltip,
+    required this.onTap,
+    this.isClose = false,
+  });
+
+  @override
+  State<_WinBtn> createState() => _WinBtnState();
+}
+
+class _WinBtnState extends State<_WinBtn> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final bg = _hovered
+        ? (widget.isClose
+            ? const Color(0xFFE81123) // Windows close-button red
+            : AppColors.brandLight)
+        : Colors.transparent;
+    final iconColor = (_hovered && widget.isClose) ? Colors.white : AppColors.text2;
+
+    return Tooltip(
+      message: widget.tooltip,
+      child: MouseRegion(
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
+        cursor: SystemMouseCursors.click,
+        child: GestureDetector(
+          onTap: widget.onTap,
+          child: Container(
+            width: 32,
+            height: 32,
+            color: bg,
+            child: Icon(widget.icon, size: 14, color: iconColor),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 // ── User footer ───────────────────────────────────────────────────────────────
 
 class _UserFooter extends StatelessWidget {
   final UserProfileData profile;
   final String displayName;
+  final bool selected;
   final bool hovered;
   final ValueChanged<bool> onHoverChanged;
   final VoidCallback onTap;
@@ -273,6 +376,7 @@ class _UserFooter extends StatelessWidget {
   const _UserFooter({
     required this.profile,
     required this.displayName,
+    required this.selected,
     required this.hovered,
     required this.onHoverChanged,
     required this.onTap,
@@ -280,6 +384,12 @@ class _UserFooter extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final bg = selected
+        ? AppColors.brandLight
+        : hovered
+        ? _kHoverBg
+        : Colors.transparent;
+
     return MouseRegion(
       onEnter: (_) => onHoverChanged(true),
       onExit: (_) => onHoverChanged(false),
@@ -287,7 +397,7 @@ class _UserFooter extends StatelessWidget {
       child: GestureDetector(
         onTap: onTap,
         child: Container(
-          color: hovered ? _kHoverBg : Colors.transparent,
+          color: bg,
           padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
           child: Row(
             children: [
@@ -319,19 +429,19 @@ class _UserFooter extends StatelessWidget {
                   children: [
                     Text(
                       displayName,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontWeight: FontWeight.w600,
                         fontSize: 13,
-                        color: AppColors.text,
+                        color: selected ? AppColors.brand : AppColors.text,
                       ),
                       overflow: TextOverflow.ellipsis,
                     ),
                     if (profile.username != null)
                       Text(
                         profile.name,
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontSize: 11,
-                          color: AppColors.text2,
+                          color: selected ? AppColors.brand : AppColors.text2,
                         ),
                         overflow: TextOverflow.ellipsis,
                       ),

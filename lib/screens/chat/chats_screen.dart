@@ -546,46 +546,68 @@ class _ChatsScreenState extends State<ChatsScreen> {
                       myReadAt = value;
                     }
                   }
+                  final isSelected = _selectedRoomId == roomDoc.id;
                   final hasUnread =
+                      !isSelected &&
                       lastAt != null &&
                       lastBy.isNotEmpty &&
                       lastBy != myUid &&
                       (myReadAt == null ||
                           lastAt.toDate().isAfter(myReadAt.toDate()));
-                  final isSelected = _selectedRoomId == roomDoc.id;
-                  Widget buildCard(Widget avatar) => Card(
-                    color: isSelected
-                        ? AppColors.brandLight
-                        : null,
-                    child: ListTile(
-                      leading: avatar,
-                      title: Text(roomName),
-                      subtitle: Text(
-                        lastMessage.isEmpty
-                            ? '${roomMembers.length} members'
-                            : lastMessage,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
+                  Widget buildCard(Widget avatar, {Widget? trailingMenu}) {
+                    // Unread dot widget, reused below.
+                    const unreadDot = SizedBox(
+                      width: 10,
+                      height: 10,
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          color: AppColors.brand,
+                          shape: BoxShape.circle,
+                        ),
                       ),
-                      trailing: hasUnread
-                          ? Container(
-                              width: 10,
-                              height: 10,
-                              decoration: const BoxDecoration(
-                                color: AppColors.brand,
-                                shape: BoxShape.circle,
-                              ),
-                            )
-                          : null,
-                      onTap: () => _openRoom(
-                        roomDoc.id,
-                        roomName,
-                        type: type,
-                        members:
-                            roomMembers.whereType<String>().toList(),
+                    );
+                    // Reduce right contentPadding when there is a menu icon so
+                    // it sits close to the card edge (mirrors article three-dot).
+                    final rightPad = trailingMenu != null ? 4.0 : 16.0;
+                    Widget? trailing;
+                    if (hasUnread && trailingMenu != null) {
+                      trailing = Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [unreadDot, const SizedBox(width: 6), trailingMenu],
+                      );
+                    } else if (hasUnread) {
+                      trailing = unreadDot;
+                    } else if (trailingMenu != null) {
+                      trailing = trailingMenu;
+                    }
+                    return Card(
+                      color: isSelected ? AppColors.brandLight : null,
+                      child: ListTile(
+                        // Rounded shape ensures the ink/hover highlight
+                        // matches the card's corners instead of a rectangle.
+                        shape: const RoundedRectangleBorder(
+                          borderRadius: BorderRadius.all(Radius.circular(12)),
+                        ),
+                        contentPadding: EdgeInsets.only(left: 16, right: rightPad),
+                        leading: avatar,
+                        title: Text(roomName),
+                        subtitle: Text(
+                          lastMessage.isEmpty
+                              ? '${roomMembers.length} members'
+                              : lastMessage,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                        trailing: trailing,
+                        onTap: () => _openRoom(
+                          roomDoc.id,
+                          roomName,
+                          type: type,
+                          members: roomMembers.whereType<String>().toList(),
+                        ),
                       ),
-                    ),
-                  );
+                    );
+                  }
                   if (type == 'direct') {
                     final otherUid = roomMembers
                         .whereType<String>()
@@ -659,72 +681,82 @@ class _ChatsScreenState extends State<ChatsScreen> {
                       },
                     );
                   }
-                  return PopupMenuButton<String>(
-                    onSelected: (value) async {
-                      if (value == 'photo') {
-                        await _changeGroupPhoto(context, roomDoc.id);
-                      } else if (value == 'leave') {
-                        final confirmed =
-                            await showDialog<bool>(
-                              context: context,
-                              builder: (context) => AlertDialog(
-                                title: const Text('Leave group?'),
-                                content: Text(
-                                  'You will leave "$roomName" and it will be removed from your list.',
-                                ),
-                                actions: [
-                                  TextButton(
-                                    onPressed: () =>
-                                        Navigator.of(context).pop(false),
-                                    child: const Text('Cancel'),
+                  return buildCard(
+                    _chatAvatar(groupPhotoUrl, false),
+                    trailingMenu: PopupMenuButton<String>(
+                      padding: EdgeInsets.zero,
+                      // Use child: instead of icon: to avoid the IconButton
+                      // 48px minimum tap-target, which pushed the icon left.
+                      child: const Icon(
+                        Icons.more_vert,
+                        size: 20,
+                        color: AppColors.text2,
+                      ),
+                      onSelected: (value) async {
+                        if (value == 'photo') {
+                          await _changeGroupPhoto(context, roomDoc.id);
+                        } else if (value == 'leave') {
+                          final confirmed =
+                              await showDialog<bool>(
+                                context: context,
+                                builder: (context) => AlertDialog(
+                                  title: const Text('Leave group?'),
+                                  content: Text(
+                                    'You will leave "$roomName" and it will be removed from your list.',
                                   ),
-                                  ElevatedButton(
-                                    onPressed: () =>
-                                        Navigator.of(context).pop(true),
-                                    style: ElevatedButton.styleFrom(
-                                      backgroundColor: AppColors.brand,
-                                      foregroundColor: Colors.white,
+                                  actions: [
+                                    TextButton(
+                                      onPressed: () =>
+                                          Navigator.of(context).pop(false),
+                                      child: const Text('Cancel'),
                                     ),
-                                    child: const Text('Leave'),
-                                  ),
-                                ],
+                                    ElevatedButton(
+                                      onPressed: () =>
+                                          Navigator.of(context).pop(true),
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: AppColors.brand,
+                                        foregroundColor: Colors.white,
+                                      ),
+                                      child: const Text('Leave'),
+                                    ),
+                                  ],
+                                ),
+                              ) ??
+                              false;
+                          if (confirmed) await _leaveGroup(roomDoc.id);
+                        }
+                      },
+                      itemBuilder: (_) => const [
+                        PopupMenuItem(
+                          value: 'photo',
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.photo_camera,
+                                color: AppColors.brand,
+                                size: 18,
                               ),
-                            ) ??
-                            false;
-                        if (confirmed) await _leaveGroup(roomDoc.id);
-                      }
-                    },
-                    itemBuilder: (_) => const [
-                      PopupMenuItem(
-                        value: 'photo',
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.photo_camera,
-                              color: AppColors.brand,
-                              size: 18,
-                            ),
-                            SizedBox(width: 8),
-                            Text('Change photo'),
-                          ],
+                              SizedBox(width: 8),
+                              Text('Change photo'),
+                            ],
+                          ),
                         ),
-                      ),
-                      PopupMenuItem(
-                        value: 'leave',
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.exit_to_app,
-                              color: AppColors.brand,
-                              size: 18,
-                            ),
-                            SizedBox(width: 8),
-                            Text('Leave group'),
-                          ],
+                        PopupMenuItem(
+                          value: 'leave',
+                          child: Row(
+                            children: [
+                              Icon(
+                                Icons.exit_to_app,
+                                color: AppColors.brand,
+                                size: 18,
+                              ),
+                              SizedBox(width: 8),
+                              Text('Leave group'),
+                            ],
+                          ),
                         ),
-                      ),
-                    ],
-                    child: buildCard(_chatAvatar(groupPhotoUrl, false)),
+                      ],
+                    ),
                   );
                 },
               );

@@ -4,6 +4,7 @@ import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:window_manager/window_manager.dart';
 
 import 'app.dart';
 import 'firebase_options.dart';
@@ -19,6 +20,33 @@ Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // ── Desktop window chrome ─────────────────────────────────────────────────
+  // macOS  → hiddenInset: traffic-light buttons stay visible, Flutter content
+  //          fills the full window height (like the Claude app).
+  // Windows → hidden: system title bar removed; custom controls are rendered
+  //            inside the sidebar header.
+  if (!kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.macOS ||
+          defaultTargetPlatform == TargetPlatform.windows)) {
+    await windowManager.ensureInitialized();
+    windowManager.waitUntilReadyToShow(
+      WindowOptions(
+        // hidden + windowButtonVisibility:true on macOS → transparent title bar
+        // with traffic-light buttons still rendered; Flutter content extends to
+        // the full window height (same behaviour as TitleBarStyle.hiddenInset on
+        // older APIs). On Windows, hidden removes the system title bar entirely.
+        titleBarStyle: TitleBarStyle.hidden,
+        windowButtonVisibility:
+            defaultTargetPlatform == TargetPlatform.macOS ? true : false,
+      ),
+      () async {
+        await windowManager.show();
+        await windowManager.focus();
+      },
+    );
+  }
+
   // Register background handler before Firebase.initializeApp() is called.
   // Guarded because onBackgroundMessage is unsupported on Windows/Linux/Web.
   if (!kIsWeb &&

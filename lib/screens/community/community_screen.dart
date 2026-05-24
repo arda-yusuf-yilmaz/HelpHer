@@ -62,7 +62,14 @@ class _CommunityScreenState extends State<CommunityScreen>
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    // If the parent is already requesting the Articles tab on first mount
+    // (e.g. the user tapped "Articles" on the Home screen before ever visiting
+    // Community), start directly on index 1 instead of Posts.
+    _tabController = TabController(
+      length: 2,
+      vsync: this,
+      initialIndex: widget.switchToArticlesSerial > 0 ? 1 : 0,
+    );
     _tabController.addListener(() => setState(() {}));
   }
 
@@ -1068,8 +1075,8 @@ class _CommunityScreenState extends State<CommunityScreen>
             children: [
               card,
               Positioned(
-                top: 6,
-                right: 6,
+                top: 8,
+                right: 20,
                 child: PopupMenuButton<String>(
                   onSelected: (v) {
                     if (v == 'edit') _openArticleSheet(existing: article);

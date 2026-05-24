@@ -95,8 +95,13 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
   }
 
   Future<void> _markAsRead() async {
+    // Use Timestamp.now() (client-side) instead of FieldValue.serverTimestamp()
+    // so the Firestore local cache is updated immediately with a real Timestamp
+    // value. FieldValue.serverTimestamp() leaves a pending sentinel in the cache
+    // that reads as null until the server acknowledges the write, which causes a
+    // brief "unread" flash in the chat list badge.
     await _roomRef.set({
-      'lastReadBy': {widget.currentUserUid: FieldValue.serverTimestamp()},
+      'lastReadBy': {widget.currentUserUid: Timestamp.now()},
     }, SetOptions(merge: true));
   }
 
@@ -123,7 +128,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
         'lastMessageAt': FieldValue.serverTimestamp(),
         'lastMessageBy': widget.currentUserUid,
         'updatedAt': FieldValue.serverTimestamp(),
-        'lastReadBy': {widget.currentUserUid: FieldValue.serverTimestamp()},
+        'lastReadBy': {widget.currentUserUid: Timestamp.now()},
       });
     } else {
       batch.set(messageRef, {
@@ -137,7 +142,7 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
         'lastMessageAt': FieldValue.serverTimestamp(),
         'lastMessageBy': widget.currentUserUid,
         'updatedAt': FieldValue.serverTimestamp(),
-        'lastReadBy': {widget.currentUserUid: FieldValue.serverTimestamp()},
+        'lastReadBy': {widget.currentUserUid: Timestamp.now()},
       });
     }
     await batch.commit();
@@ -354,9 +359,6 @@ class _ChatRoomScreenState extends State<ChatRoomScreen> {
                       return const Center(child: CircularProgressIndicator());
                     }
                     final messages = snapshot.data!.docs;
-                    if (messages.isNotEmpty) {
-                      _markAsRead();
-                    }
                     if (messages.isEmpty) {
                       return const Center(
                         child: Text(
