@@ -1038,15 +1038,8 @@ class _CommunityScreenState extends State<CommunityScreen>
         }
         final docs = snapshot.data!.docs;
         if (docs.isEmpty) {
-          return Column(
-            children: [
-              if (widget.canManageArticles) _buildAddArticleButton(),
-              const Expanded(
-                child: Center(
-                  child: Text('No articles yet.', style: TextStyle(color: AppColors.text2)),
-                ),
-              ),
-            ],
+          return const Center(
+            child: Text('No articles yet.', style: TextStyle(color: AppColors.text2)),
           );
         }
         final articles = docs
@@ -1109,59 +1102,44 @@ class _CommunityScreenState extends State<CommunityScreen>
           }
           return SingleChildScrollView(
             padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
-            child: Column(
-              children: [
-                if (widget.canManageArticles) _buildAddArticleButton(),
-                ...rows,
-              ],
-            ),
+            child: Column(children: rows),
           );
         }
 
         return ListView.builder(
           padding: const EdgeInsets.symmetric(vertical: 8),
-          itemCount: articles.length + (widget.canManageArticles ? 1 : 0),
-          itemBuilder: (_, i) {
-            if (widget.canManageArticles && i == 0) return _buildAddArticleButton();
-            final article = articles[widget.canManageArticles ? i - 1 : i];
-            return cardFor(article);
-          },
+          itemCount: articles.length,
+          itemBuilder: (_, i) => cardFor(articles[i]),
         );
       },
     );
   }
-
-  Widget _buildAddArticleButton() => Padding(
-        padding: const EdgeInsets.fromLTRB(16, 8, 16, 4),
-        child: Align(
-          alignment: Alignment.centerRight,
-          child: FilledButton.icon(
-            onPressed: () => _openArticleSheet(),
-            style: FilledButton.styleFrom(
-              backgroundColor: AppColors.brand,
-              foregroundColor: Colors.white,
-            ),
-            icon: const Icon(Icons.add, size: 18),
-            label: const Text('Add Article'),
-          ),
-        ),
-      );
 
   @override
   Widget build(BuildContext context) {
     final isComputer = isComputerPlatform(Theme.of(context).platform);
     final isPostsTab = _tabController.index == 0;
     return Scaffold(
-      // Hide FAB on desktop — we show a button in the header instead
-      floatingActionButton: isComputer || !isPostsTab
+      // Desktop: buttons in the header row. Mobile: FAB per active tab.
+      floatingActionButton: isComputer
           ? null
-          : FloatingActionButton.extended(
+          : isPostsTab
+          ? FloatingActionButton.extended(
               onPressed: _openCreatePostSheet,
               backgroundColor: AppColors.brand,
               foregroundColor: Colors.white,
               icon: const Icon(Icons.edit_outlined),
               label: const Text('Post'),
-            ),
+            )
+          : (widget.canManageArticles
+              ? FloatingActionButton.extended(
+                  onPressed: () => _openArticleSheet(),
+                  backgroundColor: AppColors.brand,
+                  foregroundColor: Colors.white,
+                  icon: const Icon(Icons.add),
+                  label: const Text('Add Article'),
+                )
+              : null),
       body: SafeArea(
         child: Column(
           children: [
@@ -1178,7 +1156,7 @@ class _CommunityScreenState extends State<CommunityScreen>
                       ),
                     ),
                   ),
-                  // On desktop show New Post button in header (only on Posts tab)
+                  // On desktop show the action button in the header per active tab.
                   if (isComputer && isPostsTab)
                     FilledButton.icon(
                       onPressed: _openCreatePostSheet,
@@ -1188,6 +1166,16 @@ class _CommunityScreenState extends State<CommunityScreen>
                       ),
                       icon: const Icon(Icons.edit_outlined, size: 18),
                       label: const Text('New Post'),
+                    ),
+                  if (isComputer && !isPostsTab && widget.canManageArticles)
+                    FilledButton.icon(
+                      onPressed: () => _openArticleSheet(),
+                      style: FilledButton.styleFrom(
+                        backgroundColor: AppColors.brand,
+                        foregroundColor: Colors.white,
+                      ),
+                      icon: const Icon(Icons.add, size: 18),
+                      label: const Text('Add Article'),
                     ),
                 ],
               ),
