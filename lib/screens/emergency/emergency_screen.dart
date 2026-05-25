@@ -602,39 +602,41 @@ class _EmergencyScreenState extends State<EmergencyScreen>
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
+    return CustomScrollView(
+      slivers: [
         // ── Brand header (SOS button + optional countdown) ─────────────────
-        Container(
-          width: double.infinity,
-          padding: EdgeInsets.fromLTRB(
-            0,
-            60,
-            0,
-            _isSafetyCheckActive ? 24 : 40,
-          ),
-          color: AppColors.brand,
-          child: Column(
-            children: [
-              _buildSosButton(),
-              const SizedBox(height: 20),
-              const Text(
-                'Hold to activate emergency actions',
-                style: TextStyle(color: Colors.white70),
-              ),
-              if (_isSafetyCheckActive) ...[
-                const SizedBox(height: 24),
-                _buildSafetyCheckArc(),
-                const SizedBox(height: 4),
+        SliverToBoxAdapter(
+          child: Container(
+            width: double.infinity,
+            padding: EdgeInsets.fromLTRB(
+              0,
+              60,
+              0,
+              _isSafetyCheckActive ? 24 : 40,
+            ),
+            color: AppColors.brand,
+            child: Column(
+              children: [
+                _buildSosButton(),
+                const SizedBox(height: 20),
+                const Text(
+                  'Hold to activate emergency actions',
+                  style: TextStyle(color: Colors.white70),
+                ),
+                if (_isSafetyCheckActive) ...[
+                  const SizedBox(height: 24),
+                  _buildSafetyCheckArc(),
+                  const SizedBox(height: 4),
+                ],
               ],
-            ],
+            ),
           ),
         ),
         // ── Contacts + emergency line ──────────────────────────────────────
-        Expanded(
-          child: ListView(
-            padding: const EdgeInsets.all(16),
-            children: [
+        SliverPadding(
+          padding: const EdgeInsets.all(16),
+          sliver: SliverList(
+            delegate: SliverChildListDelegate([
               const Text(
                 'EMERGENCY CONTACTS',
                 style: TextStyle(
@@ -669,7 +671,7 @@ class _EmergencyScreenState extends State<EmergencyScreen>
                 const Color(0xFFE8EAF6),
                 onTap: _openEmergencyLine,
               ),
-            ],
+            ]),
           ),
         ),
       ],

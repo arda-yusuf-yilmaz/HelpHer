@@ -156,6 +156,35 @@ class E2eeManager {
     }
   }
 
+  /// Generates a brand-new keypair, saves it locally, publishes the public key,
+  /// and removes any existing Firestore backup so the recovery dialog is never
+  /// shown again on subsequent launches.
+  static Future<void> generateFreshKeypair(
+    String uid,
+    FirebaseFirestore firestore,
+  ) async {
+    try {
+      final keyPair = await _x25519.newKeyPair();
+      final privBytes = await keyPair.extractPrivateKeyBytes();
+      final pubBytes = (await keyPair.extractPublicKey()).bytes;
+      await _storage.write(key: _privKey(uid), value: base64.encode(privBytes));
+      await _storage.write(key: _pubKey(uid), value: base64.encode(pubBytes));
+      await firestore.collection('users').doc(uid).set(
+        {'e2eePublicKey': base64.encode(pubBytes)},
+        SetOptions(merge: true),
+      );
+      // Remove the stale backup so backupAvailable is never returned again.
+      await firestore
+          .collection('users')
+          .doc(uid)
+          .collection('privateData')
+          .doc('keyBackup')
+          .delete();
+    } catch (_) {
+      // Non-fatal.
+    }
+  }
+
   /// Derives the shared secret bytes for a direct chat with [theirPublicKeyB64].
   /// Returns null if our keypair is missing.
   static Future<Uint8List?> deriveSharedSecret(

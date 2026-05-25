@@ -673,7 +673,7 @@ class _MainShellState extends State<MainShell>
 
   Future<void> _showKeyRecoveryDialog() async {
     final passphraseController = TextEditingController();
-    await showDialog<void>(
+    final result = await showDialog<String>(
       context: context,
       barrierDismissible: false,
       builder: (ctx) {
@@ -713,8 +713,8 @@ class _MainShellState extends State<MainShell>
               ),
               actions: [
                 TextButton(
-                  onPressed: () => Navigator.of(ctx).pop(),
-                  child: const Text('Skip — start fresh'),
+                  onPressed: () => Navigator.of(ctx).pop('fresh'),
+                  child: const Text('Start fresh'),
                 ),
                 ElevatedButton(
                   onPressed: restoring
@@ -733,7 +733,7 @@ class _MainShellState extends State<MainShell>
                             });
                             return;
                           }
-                          if (ctx.mounted) Navigator.of(ctx).pop();
+                          if (ctx.mounted) Navigator.of(ctx).pop('restored');
                         },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: AppColors.brand,
@@ -755,6 +755,13 @@ class _MainShellState extends State<MainShell>
       },
     );
     passphraseController.dispose();
+    // User chose to start fresh: generate a new keypair (deletes the old
+    // Firestore backup so this dialog never appears again), then offer to
+    // set a new backup passphrase for the fresh key.
+    if (result == 'fresh' && mounted) {
+      await E2eeManager.generateFreshKeypair(widget.currentUserUid, _firestore);
+      if (mounted) _showBackupSetupDialog();
+    }
   }
 
   Future<void> _loadArticles() async {
