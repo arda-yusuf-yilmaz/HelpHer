@@ -149,11 +149,17 @@ class _MainShellState extends State<MainShell>
     setState(() => _currentIndex = index);
     final distance = (index - previousIndex).abs();
     _tabSlideDirection = index > previousIndex ? 1 : -1;
-    // Desktop uses the entrance-controller animation (vertical slide) for every
-    // transition.  Mobile keeps the PageView's built-in horizontal scroll for
-    // adjacent tabs so the swipe physics feel native.
+
     final isComputer = isComputerPlatform(Theme.of(context).platform);
-    if (animated && distance == 1 && !isComputer) {
+    // Desktop: jump instantly — no transition animation.
+    if (isComputer) {
+      _pageController.jumpToPage(index);
+      _tabEntranceController.value = 1;
+      return;
+    }
+    // Mobile: use PageView's built-in horizontal scroll for adjacent tabs so
+    // swipe physics feel native; entrance controller for non-adjacent jumps.
+    if (animated && distance == 1) {
       _tabEntranceController.value = 1;
       _pageController.animateToPage(
         index,

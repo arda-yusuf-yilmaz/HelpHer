@@ -436,13 +436,11 @@ class _ProfileScreenState extends State<ProfileScreen> {
   Widget build(BuildContext context) {
     final isComputer = isComputerPlatform(Theme.of(context).platform);
     return SafeArea(
-      child: Align(
-        alignment: Alignment.topCenter,
-        child: ConstrainedBox(
-          constraints: BoxConstraints(
-            maxWidth: isComputer ? 680 : double.infinity,
-          ),
-          child: ListView(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxWidth: isComputer ? 680 : double.infinity,
+        ),
+        child: ListView(
             padding: const EdgeInsets.all(16),
             children: [
           const Text(
@@ -825,7 +823,6 @@ class _ProfileScreenState extends State<ProfileScreen> {
           ),
         ],
       ),
-        ),
       ),
     );
   }
