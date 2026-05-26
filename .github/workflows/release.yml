@@ -206,22 +206,31 @@ jobs:
           codesign --verify --deep --strict "$APP"
           echo "✓ Signed and verified $APP"
 
+      - name: Install DMG tools and generate background
+        run: |
+          pip3 install --quiet Pillow dmgbuild
+          python3 installer/macos/generate-dmg-background.py
+
       - name: Package macOS build (dmg)
         run: |
           set -euo pipefail
           TAG="${GITHUB_REF_NAME}"
+          if [[ ! "$TAG" =~ ^v ]]; then
+            TAG="${{ inputs.tag }}"
+          fi
           APP_PATH="build/macos/Build/Products/Release/HelpHer.app"
-          DMG="HelpHer-${TAG}-macOS.dmg"
+          DMG="dist/HelpHer-${TAG}-macOS.dmg"
           if [ ! -d "${APP_PATH}" ]; then
             echo "Expected app not found at ${APP_PATH}"
             exit 1
           fi
           mkdir -p dist
-          STAGE="$(mktemp -d)"
-          cp -R "${APP_PATH}" "${STAGE}/"
-          ln -s /Applications "${STAGE}/Applications"
-          hdiutil create -volname "HelpHer" -srcfolder "${STAGE}" -ov -format UDZO "dist/${DMG}"
-          echo "Created dist/${DMG}"
+          python3 -m dmgbuild \
+            -s installer/macos/dmgbuild-settings.py \
+            -D app="${APP_PATH}" \
+            "HelpHer" \
+            "${DMG}"
+          echo "Created ${DMG}"
 
       - name: Notarize dmg
         env:

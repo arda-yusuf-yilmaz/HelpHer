@@ -11,10 +11,10 @@ const kWebAppCheckRecaptchaSiteKey = String.fromEnvironment(
 );
 
 class AppColors {
-  static const brand = Color(0xFFC1244A);
-  static const brandDark = Color(0xFF8C1535);
-  static const brandLight = Color(0xFFF9E8EC);
-  static const brandMid = Color(0xFFE8547A);
+  static const brand = Color(0xFF6B4F7C);
+  static const brandDark = Color(0xFF4E3860);
+  static const brandLight = Color(0xFFF3EEF7);
+  static const brandMid = Color(0xFF9A74AE);
   static const text = Color(0xFF1A1A1A);
   static const text2 = Color(0xFF6B6B6B);
   static const surface = Colors.white;
@@ -80,7 +80,7 @@ class HelpHerApp extends StatelessWidget {
       scrollBehavior: const _NoOverscrollBehavior(),
       theme: ThemeData(
         useMaterial3: true,
-        scaffoldBackgroundColor: const Color(0xFFF5F5F5),
+        scaffoldBackgroundColor: const Color(0xFFF7F4FA),
         textTheme: GoogleFonts.dmSansTextTheme(),
       ),
       home: AuthGate(firebaseState: firebaseState),

@@ -9,7 +9,7 @@ import 'profile_initials_avatar.dart';
 // buttons, which sit at ≈ y 8–24 pt from the top of the window.
 const double _kMacTrafficLightClearance = 38.0;
 
-const _kHoverBg = Color(0xFFEFEBEC);
+const _kHoverBg = Color(0xFFEAE3F2);
 
 class DesktopSidebar extends StatefulWidget {
   final int selectedIndex;
@@ -33,7 +33,7 @@ class _DesktopSidebarState extends State<DesktopSidebar> {
   // -1 = nothing hovered, 0-3 = nav items, 5 = footer
   int _hoveredIndex = -1;
 
-  static const _sidebarBg = Color(0xFFF9F5F6);
+  static const _sidebarBg = Color(0xFFF5F1F9);
 
   @override
   Widget build(BuildContext context) {
@@ -69,10 +69,16 @@ class _DesktopSidebarState extends State<DesktopSidebar> {
                       color: AppColors.brand,
                       borderRadius: BorderRadius.circular(9),
                     ),
-                    child: const Icon(
-                      Icons.favorite_rounded,
-                      color: Colors.white,
-                      size: 18,
+                    child: const Center(
+                      child: Text(
+                        'HH',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -0.5,
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -159,7 +165,7 @@ class _Divider extends StatelessWidget {
   Widget build(BuildContext context) => const Divider(
         height: 1,
         thickness: 1,
-        color: Color(0xFFEDE8E9),
+        color: Color(0xFFE4DCF0),
       );
 }
 
