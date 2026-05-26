@@ -1151,7 +1151,15 @@ class _CommunityScreenState extends State<CommunityScreen>
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(16, 16, 16, 0),
+              padding: EdgeInsets.fromLTRB(
+                16,
+                isComputer &&
+                        Theme.of(context).platform == TargetPlatform.windows
+                    ? 44
+                    : 16,
+                16,
+                0,
+              ),
               child: Row(
                 children: [
                   const Expanded(
