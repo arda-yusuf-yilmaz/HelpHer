@@ -38,6 +38,16 @@ jobs:
       - name: Disable Swift Package Manager
         run: flutter config --no-enable-swift-package-manager
 
+      - name: Cache CocoaPods
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cocoapods
+            macos/Pods
+          key: ${{ runner.os }}-pods-${{ hashFiles('macos/Podfile.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-pods-
+
       - name: Install dependencies
         run: flutter pub get
 
