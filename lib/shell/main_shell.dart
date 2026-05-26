@@ -20,7 +20,7 @@ import '../screens/chat/chats_screen.dart';
 import '../screens/emergency/emergency_screen.dart';
 import '../screens/profile/profile_screen.dart';
 import '../screens/notifications/notifications_screen.dart';
-import '../widgets/desktop_sidebar.dart';
+import '../widgets/desktop_sidebar.dart' show DesktopSidebar, WindowsControls;
 
 class MainShell extends StatefulWidget {
   final String initialUserName;
@@ -604,11 +604,15 @@ class _MainShellState extends State<MainShell>
                     TextField(
                       controller: passphraseController,
                       obscureText: true,
+                      onChanged: (_) => setDialogState(() {}),
                       decoration: const InputDecoration(
                         labelText: 'Recovery passphrase',
                         border: OutlineInputBorder(),
                       ),
                     ),
+                    const SizedBox(height: 8),
+                    _PassphraseStrengthBar(
+                        passphrase: passphraseController.text),
                     const SizedBox(height: 10),
                     TextField(
                       controller: confirmController,
@@ -1218,7 +1222,21 @@ class _MainShellState extends State<MainShell>
                               unreadChatsCount: unreadChatsCount,
                             ),
                             const VerticalDivider(width: 1, thickness: 1),
-                            Expanded(child: pageView),
+                            Expanded(
+                              child: Stack(
+                                children: [
+                                  pageView,
+                                  if (!kIsWeb &&
+                                      defaultTargetPlatform ==
+                                          TargetPlatform.windows)
+                                    const Positioned(
+                                      top: 0,
+                                      right: 0,
+                                      child: WindowsControls(),
+                                    ),
+                                ],
+                              ),
+                            ),
                           ],
                         )
                       : pageView,
@@ -1240,6 +1258,56 @@ class _MainShellState extends State<MainShell>
           },
         );
       },
+    );
+  }
+}
+
+// ── Passphrase strength indicator ─────────────────────────────────────────────
+
+class _PassphraseStrengthBar extends StatelessWidget {
+  final String passphrase;
+
+  const _PassphraseStrengthBar({required this.passphrase});
+
+  static int _strength(String p) {
+    if (p.isEmpty) return 0;
+    if (p.length < 8) return 1;
+    final hasVariety = p.contains(RegExp(r'[0-9]')) ||
+        p.contains(RegExp(r'[^a-zA-Z0-9]')) ||
+        p.contains(' ');
+    if (p.length >= 12 && hasVariety) return 3;
+    return 2;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final s = _strength(passphrase);
+    if (s == 0) return const SizedBox.shrink();
+
+    final (label, color) = switch (s) {
+      1 => ('Too short', Colors.red),
+      2 => ('Fair', Colors.orange),
+      _ => ('Strong', Colors.green),
+    };
+
+    return Row(
+      children: [
+        ...List.generate(3, (i) {
+          final filled = i < s;
+          return Expanded(
+            child: Container(
+              height: 3,
+              margin: EdgeInsets.only(right: i < 2 ? 4 : 0),
+              decoration: BoxDecoration(
+                color: filled ? color : const Color(0xFFE0D8D9),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+          );
+        }),
+        const SizedBox(width: 8),
+        Text(label, style: TextStyle(fontSize: 12, color: color)),
+      ],
     );
   }
 }

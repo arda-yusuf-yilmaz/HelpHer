@@ -87,11 +87,6 @@ class _DesktopSidebarState extends State<DesktopSidebar> {
                       ),
                     ),
                   ),
-                  // Windows: render min / max / close since the system title
-                  // bar is hidden.
-                  if (!kIsWeb &&
-                      defaultTargetPlatform == TargetPlatform.windows)
-                    const _WindowsControls(),
                 ],
               ),
             ),
@@ -279,8 +274,8 @@ class _SidebarItem extends StatelessWidget {
 
 // ── Windows caption controls ──────────────────────────────────────────────────
 
-class _WindowsControls extends StatelessWidget {
-  const _WindowsControls();
+class WindowsControls extends StatelessWidget {
+  const WindowsControls({super.key});
 
   @override
   Widget build(BuildContext context) {
