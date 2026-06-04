@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Account Deletion — HelpHer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --brand: #6B4F7C; --brand-dark: #4E3860; --brand-light: #F3EEF7;
+      --text: #1A1A1A; --text2: #6B6B6B; --divider: #E4DCF0; --bg: #F7F4FA;
+    }
+    body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--text); line-height: 1.7; }
+    header { background: var(--brand); color: #fff; padding: 32px 24px; }
+    header .inner { max-width: 760px; margin: 0 auto; display: flex; align-items: center; gap: 16px; }
+    .logo { width: 48px; height: 48px; background: rgba(255,255,255,0.15); border-radius: 12px; display: flex; align-items: center; justify-content: center; font-size: 18px; font-weight: 700; letter-spacing: -0.5px; flex-shrink: 0; }
+    header h1 { font-size: 22px; font-weight: 700; }
+    header p  { font-size: 14px; opacity: 0.8; margin-top: 2px; }
+    main { max-width: 760px; margin: 0 auto; padding: 40px 24px 80px; }
+    .steps { counter-reset: steps; list-style: none; padding: 0; margin: 24px 0; }
+    .steps li {
+      counter-increment: steps;
+      display: flex; gap: 16px; align-items: flex-start;
+      padding: 16px 0; border-bottom: 1px solid var(--divider);
+    }
+    .steps li:last-child { border-bottom: none; }
+    .step-num {
+      width: 32px; height: 32px; border-radius: 50%;
+      background: var(--brand); color: #fff;
+      display: flex; align-items: center; justify-content: center;
+      font-weight: 700; font-size: 14px; flex-shrink: 0; margin-top: 2px;
+    }
+    .step-num::before { content: counter(steps); }
+    h2 { font-size: 20px; font-weight: 700; color: var(--brand-dark); margin: 40px 0 12px; padding-bottom: 8px; border-bottom: 1px solid var(--divider); }
+    h3 { font-size: 16px; font-weight: 600; margin: 20px 0 8px; }
+    p { margin-bottom: 12px; }
+    table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 14px; }
+    th { background: var(--brand-light); color: var(--brand-dark); text-align: left; padding: 10px 14px; font-weight: 600; border-bottom: 2px solid var(--divider); }
+    td { padding: 10px 14px; border-bottom: 1px solid var(--divider); vertical-align: top; }
+    tr:last-child td { border-bottom: none; }
+    .tag { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: 600; }
+    .tag-deleted  { background: #FDECEA; color: #C0392B; }
+    .tag-retained { background: #FFF8E1; color: #7A5500; }
+    .tag-local    { background: #EAF4EA; color: #276227; }
+    a { color: var(--brand); text-decoration: underline; }
+    a:hover { color: var(--brand-dark); }
+    footer { text-align: center; padding: 32px 24px; font-size: 13px; color: var(--text2); border-top: 1px solid var(--divider); }
+  </style>
+</head>
+<body>
+<header>
+  <div class="inner">
+    <div class="logo">HH</div>
+    <div><h1>HelpHer</h1><p>Account Deletion</p></div>
+  </div>
+</header>
+<main>
+
+  <p style="margin-top:8px; color: var(--text2);">Last updated: 27 May 2026</p>
+
+  <h2>How to Delete Your Account</h2>
+  <p>You can delete your account directly from within the HelpHer app. No need to contact us.</p>
+
+  <ol class="steps">
+    <li><div class="step-num"></div><div><strong>Open the app</strong> and go to the <strong>Profile</strong> tab.</div></li>
+    <li><div class="step-num"></div><div>Scroll down to the <strong>Danger Zone</strong> section.</div></li>
+    <li><div class="step-num"></div><div>Tap <strong>"Delete Account"</strong> and confirm when prompted.</div></li>
+    <li><div class="step-num"></div><div>Your account and associated data will be permanently deleted.</div></li>
+  </ol>
+
+  <h2>What Happens to Your Data</h2>
+
+  <table>
+    <thead>
+      <tr><th>Data</th><th>What happens</th><th>Timeframe</th></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td>Account (email, name, username)</td>
+        <td><span class="tag tag-deleted">Deleted</span></td>
+        <td>Immediately</td>
+      </tr>
+      <tr>
+        <td>Profile photo</td>
+        <td><span class="tag tag-deleted">Deleted</span></td>
+        <td>Immediately</td>
+      </tr>
+      <tr>
+        <td>Community posts</td>
+        <td><span class="tag tag-deleted">Deleted</span></td>
+        <td>Immediately</td>
+      </tr>
+      <tr>
+        <td>Encrypted messages (on our servers)</td>
+        <td><span class="tag tag-deleted">Deleted</span></td>
+        <td>Immediately</td>
+      </tr>
+      <tr>
+        <td>E2EE key backup</td>
+        <td><span class="tag tag-deleted">Deleted</span></td>
+        <td>Immediately</td>
+      </tr>
+      <tr>
+        <td>Push notification token</td>
+        <td><span class="tag tag-deleted">Deleted</span></td>
+        <td>Immediately</td>
+      </tr>
+      <tr>
+        <td>SOS alert history</td>
+        <td><span class="tag tag-deleted">Deleted</span></td>
+        <td>Within 90 days</td>
+      </tr>
+      <tr>
+        <td>Messages already delivered to other users</td>
+        <td><span class="tag tag-retained">Remains on recipient's device</span></td>
+        <td>We cannot retrieve content from other users' devices</td>
+      </tr>
+      <tr>
+        <td>Emergency contacts</td>
+        <td><span class="tag tag-local">Stored locally only — uninstalling the app removes them</span></td>
+        <td>On uninstall</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>Can't Access the App?</h2>
+  <p>If you are unable to access your account to delete it in-app, contact us and we will process the deletion manually within 30 days after verifying account ownership:</p>
+  <p><a href="https://github.com/arda-yusuf-yilmaz/HelpHer/issues">github.com/arda-yusuf-yilmaz/HelpHer/issues</a></p>
+  <p>Please do not post personal information publicly. We will direct you to a private channel.</p>
+
+  <h2>Related</h2>
+  <p>
+    <a href="../privacy/">Privacy Policy</a> &nbsp;·&nbsp;
+    <a href="../terms/">Terms of Service</a>
+  </p>
+
+</main>
+<footer>© 2025–2026 Arda Yusuf Yılmaz, Hoda Hammoudeh, Can Köksal · HelpHer™</footer>
+</body>
+</html>

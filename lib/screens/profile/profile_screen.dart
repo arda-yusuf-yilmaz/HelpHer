@@ -828,6 +828,19 @@ class _ProfileScreenState extends State<ProfileScreen> {
           const SizedBox(height: 8),
           ListTile(
             contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.gavel_outlined, color: AppColors.brand),
+            title: const Text('Terms of Service'),
+            subtitle: const Text('Rules and limitations of use'),
+            trailing: const Icon(Icons.open_in_new,
+                size: 16, color: AppColors.text2),
+            onTap: () => launchUrl(
+              Uri.parse(
+                  'https://arda-yusuf-yilmaz.github.io/HelpHer/terms/'),
+              mode: LaunchMode.externalApplication,
+            ),
+          ),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
             leading: const Icon(Icons.privacy_tip_outlined,
                 color: AppColors.brand),
             title: const Text('Privacy Policy'),

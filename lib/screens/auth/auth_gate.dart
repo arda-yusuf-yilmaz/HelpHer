@@ -495,7 +495,21 @@ class _AuthGateState extends State<AuthGate> {
                                   color: AppColors.text2, fontSize: 13),
                               children: [
                                 const TextSpan(
-                                    text: 'I have read and agree to the '),
+                                    text: 'I agree to the '),
+                                TextSpan(
+                                  text: 'Terms of Service',
+                                  style: const TextStyle(
+                                    color: AppColors.brand,
+                                    decoration: TextDecoration.underline,
+                                  ),
+                                  recognizer: TapGestureRecognizer()
+                                    ..onTap = () => launchUrl(
+                                          Uri.parse(
+                                              'https://arda-yusuf-yilmaz.github.io/HelpHer/terms/'),
+                                          mode: LaunchMode.externalApplication,
+                                        ),
+                                ),
+                                const TextSpan(text: ' and '),
                                 TextSpan(
                                   text: 'Privacy Policy',
                                   style: const TextStyle(
