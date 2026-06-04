@@ -55,16 +55,8 @@
       flex-shrink: 0;
     }
 
-    header h1 {
-      font-size: 22px;
-      font-weight: 700;
-    }
-
-    header p {
-      font-size: 14px;
-      opacity: 0.8;
-      margin-top: 2px;
-    }
+    header h1 { font-size: 22px; font-weight: 700; }
+    header p  { font-size: 14px; opacity: 0.8; margin-top: 2px; }
 
     main {
       max-width: 760px;
@@ -84,6 +76,16 @@
 
     .meta strong { color: var(--text); }
 
+    .notice {
+      background: #FFF8E7;
+      border-left: 3px solid #F0A500;
+      border-radius: 0 8px 8px 0;
+      padding: 12px 16px;
+      margin: 12px 0;
+      font-size: 13px;
+      color: #7A5500;
+    }
+
     h2 {
       font-size: 20px;
       font-weight: 700;
@@ -100,13 +102,9 @@
       margin: 24px 0 8px;
     }
 
-    p { margin-bottom: 12px; color: var(--text); }
+    p { margin-bottom: 12px; }
 
-    ul, ol {
-      padding-left: 20px;
-      margin-bottom: 12px;
-    }
-
+    ul, ol { padding-left: 20px; margin-bottom: 12px; }
     li { margin-bottom: 6px; }
 
     table {
@@ -178,6 +176,10 @@
     <strong>Contact:</strong> <a href="https://github.com/arda-yusuf-yilmaz/HelpHer/issues">GitHub Issues</a>
   </div>
 
+  <div class="notice">
+    Please do not post personal information publicly when contacting us. If your request requires sharing personal data, we will direct you to a private communication channel.
+  </div>
+
   <h2>1. Who We Are</h2>
   <p>HelpHer is a safety and community application designed to empower women to speak up and access support. The application is developed by Arda Yusuf Yılmaz, Hoda Hammoudeh, and Can Köksal ("we," "us," or "our").</p>
   <p>We are the data controller for all personal data processed through the HelpHer application.</p>
@@ -185,7 +187,6 @@
   <h2>2. Data We Collect</h2>
 
   <h3>2.1 Account Information</h3>
-  <p>When you create an account, we collect:</p>
   <ul>
     <li><strong>Email address</strong> — provided directly or via Google Sign-In</li>
     <li><strong>Full name</strong> — provided directly or imported from your Google account</li>
@@ -194,28 +195,23 @@
   </ul>
 
   <h3>2.2 Messages</h3>
-  <p>HelpHer supports direct messaging between users. All messages are <strong>end-to-end encrypted (E2EE)</strong> using the X25519 key exchange protocol and AES-256-GCM encryption. This means:</p>
-  <ul>
-    <li>Message content cannot be read by us or any third party, including Google</li>
-    <li>Only you and the person you are messaging can decrypt your messages</li>
-    <li>We store only the encrypted ciphertext on our servers</li>
-  </ul>
-  <p>If you choose to set a recovery passphrase, an encrypted copy of your private key is stored on our servers to allow recovery on a new device. We cannot access your private key.</p>
+  <p>All messages are <strong>end-to-end encrypted (E2EE)</strong> using X25519 and AES-256-GCM. The system is designed so that only the communicating users can decrypt messages. We store only encrypted ciphertext and have no technical means to read message content.</p>
+  <p>If you set a recovery passphrase, an encrypted copy of your private key is stored on our servers. It is encrypted with AES-256-GCM via PBKDF2 (100,000 iterations, SHA-256). We cannot access your private key.</p>
 
   <h3>2.3 Community Content</h3>
-  <p>Posts and articles you publish in the Community section are stored on our servers and are visible to other HelpHer users. Do not share personally identifying information in public posts.</p>
+  <p>Posts and articles you publish are stored on our servers and visible to other HelpHer users. Do not share personally identifying information in public posts.</p>
 
   <h3>2.4 Emergency Alerts (SOS)</h3>
   <div class="highlight">
     Location data is collected <strong>only</strong> when you explicitly trigger an SOS alert — we do not track your location continuously.
   </div>
-  <p>When you trigger an SOS alert, we collect your GPS location at the time of the alert and the timestamp. Your emergency contacts (names and phone numbers) are stored <strong>locally on your device only</strong> and are never transmitted to our servers.</p>
+  <p>When you trigger an SOS alert, we collect your GPS location and the timestamp. Emergency contacts (names and phone numbers) are stored <strong>locally on your device only</strong> and never transmitted to our servers.</p>
 
   <h3>2.5 Push Notification Token</h3>
-  <p>To deliver push notifications (including safety alerts), we store a device token provided by Firebase Cloud Messaging, associated with your account.</p>
+  <p>To deliver safety alerts and notifications, we store a Firebase Cloud Messaging device token associated with your account.</p>
 
   <h3>2.6 Technical Data</h3>
-  <p>We may collect basic technical information such as app version and platform to support app functionality. We do not collect analytics or advertising identifiers.</p>
+  <p>We may collect basic information such as app version and platform. We do not collect analytics or advertising identifiers.</p>
 
   <h2>3. Why We Collect This Data</h2>
   <table>
@@ -223,12 +219,12 @@
       <tr><th>Data</th><th>Purpose</th><th>Legal Basis</th></tr>
     </thead>
     <tbody>
-      <tr><td>Email, name</td><td>Account creation and authentication</td><td>Explicit consent / contract</td></tr>
-      <tr><td>Username, profile photo</td><td>User identity within the app</td><td>Explicit consent</td></tr>
-      <tr><td>Encrypted messages</td><td>Enabling private communication</td><td>Explicit consent</td></tr>
-      <tr><td>Encrypted key backup</td><td>Message recovery on new devices</td><td>Explicit consent</td></tr>
-      <tr><td>Community posts</td><td>Enabling community features</td><td>Explicit consent</td></tr>
-      <tr><td>GPS location (SOS)</td><td>Emergency safety alerts</td><td>Legitimate interest / vital interests</td></tr>
+      <tr><td>Email, name</td><td>Account creation and authentication</td><td>Performance of contract</td></tr>
+      <tr><td>Username, profile photo</td><td>User identity within the app</td><td>Performance of contract</td></tr>
+      <tr><td>Encrypted messages</td><td>Enabling private communication</td><td>Performance of contract</td></tr>
+      <tr><td>Encrypted key backup</td><td>Message recovery on new devices</td><td>Performance of contract</td></tr>
+      <tr><td>Community posts</td><td>Enabling community features</td><td>Performance of contract</td></tr>
+      <tr><td>GPS location (SOS)</td><td>Emergency safety alerts</td><td>Vital interests / legitimate interest</td></tr>
       <tr><td>Push notification token</td><td>Delivering safety notifications</td><td>Explicit consent</td></tr>
     </tbody>
   </table>
@@ -249,39 +245,53 @@
   </table>
 
   <h2>5. Third Parties</h2>
-  <p>We use <strong>Google Firebase</strong> (Google LLC, USA) to operate HelpHer, including Firebase Authentication, Cloud Firestore, Firebase Storage, Firebase Cloud Messaging, and Firebase App Check.</p>
-  <p>Firebase is operated by Google LLC, which is subject to US law. Data processed by Firebase may be transferred to and stored in the United States. Google participates in the EU-US Data Privacy Framework.</p>
+  <p>We use <strong>Google Firebase</strong> (Google LLC, USA) including Firebase Authentication, Cloud Firestore, Firebase Storage, Firebase Cloud Messaging, and Firebase App Check.</p>
+  <p>Data processed by Firebase may be transferred to and stored in the United States. Google participates in the EU-US Data Privacy Framework and may also rely on Standard Contractual Clauses (SCCs) and other legally recognised transfer mechanisms where applicable.</p>
   <p>We do not sell, rent, or share your personal data with any other third parties for commercial purposes.</p>
 
   <h2>6. International Data Transfers</h2>
-  <p>Our infrastructure is hosted on Google Firebase, which may process and store data on servers located outside of Turkey. By using HelpHer, you consent to this transfer.</p>
+  <p>Our infrastructure is hosted on Google Firebase, which may process and store data outside of Turkey. By using HelpHer, you consent to this transfer. We take reasonable steps to ensure appropriate safeguards are in place.</p>
 
   <h2>7. Your Rights</h2>
-  <p>You have the right to know whether your personal data is being processed, request access, request correction or deletion, object to processing, request restriction, and data portability. You may also withdraw consent at any time.</p>
-  <p>To exercise any of these rights, open an issue at: <a href="https://github.com/arda-yusuf-yilmaz/HelpHer/issues">github.com/arda-yusuf-yilmaz/HelpHer/issues</a>. We will respond within 30 days.</p>
-  <p>To delete your account and all associated data, use the account deletion option within the app.</p>
-  <p>You also have the right to <strong>lodge a complaint</strong> with a supervisory authority. For users in Turkey: <a href="https://www.kvkk.gov.tr" target="_blank">KVKK (kvkk.gov.tr)</a>. For EU users, contact your local data protection authority.</p>
+  <ul>
+    <li>Know whether your personal data is being processed</li>
+    <li>Request access to your personal data</li>
+    <li>Request correction of inaccurate data</li>
+    <li>Request deletion of your data</li>
+    <li>Object to the processing of your data</li>
+    <li>Request restriction of processing</li>
+    <li>Data portability — receive your data in a structured, machine-readable format</li>
+    <li>Withdraw consent at any time</li>
+    <li><strong>Lodge a complaint</strong> with a supervisory authority — for Turkey: <a href="https://www.kvkk.gov.tr" target="_blank">KVKK (kvkk.gov.tr)</a>; for EU users, contact your local data protection authority</li>
+  </ul>
+  <p>To exercise any of these rights, contact us via <a href="https://github.com/arda-yusuf-yilmaz/HelpHer/issues">GitHub Issues</a>. Please do not post personal information publicly. We may require verification of account ownership before processing your request. We will respond within 30 days.</p>
+  <p><strong>Account deletion:</strong> Use the account deletion option in the app. Messages already delivered to and decrypted by other users may remain visible to those users after your account is deleted, as we cannot retrieve content from other users' devices. Community posts will be removed upon account deletion.</p>
 
   <h2>8. Automated Decision-Making</h2>
   <p>HelpHer does not use automated decision-making or profiling that produces legal or similarly significant effects on users. No decisions about you are made solely by automated means.</p>
 
+  <h2>9. Law Enforcement and Legal Requests</h2>
+  <p>We may disclose personal data when required by applicable law, court order, or a valid governmental or regulatory request. Where permitted by law, we will attempt to notify affected users before disclosing their data.</p>
+
   <h2>10. Security</h2>
   <ul>
-    <li>All messages are end-to-end encrypted — we cannot read them</li>
+    <li>Messages are end-to-end encrypted — the system is designed so that we cannot read them</li>
     <li>Your private encryption key never leaves your device in plaintext</li>
-    <li>Connections between the app and our servers use TLS encryption</li>
-    <li>We use Firebase App Check to prevent unauthorized access to our backend</li>
+    <li>All connections use TLS encryption</li>
+    <li>Firebase App Check prevents unauthorised backend access</li>
     <li>Emergency contacts are stored locally on your device only</li>
   </ul>
+  <p>No system is completely secure. Please report security vulnerabilities responsibly via our GitHub issues page.</p>
 
   <h2>11. Children</h2>
-  <p>HelpHer is intended for adult users. We do not knowingly collect personal data from anyone under the age of 18. If you believe we have inadvertently collected data from a minor, please contact us and we will delete it promptly.</p>
+  <p>HelpHer is not directed to children under the age of 18. We do not knowingly collect personal data from anyone under 18. Users under 18 should not use the service without parental permission. If you believe we have inadvertently collected data from a minor, please contact us and we will delete it promptly.</p>
 
   <h2>12. Changes to This Policy</h2>
-  <p>We may update this privacy policy from time to time. We will notify users of significant changes through the app. The "Last updated" date at the top reflects the most recent revision.</p>
+  <p>We may update this policy from time to time. We will notify users of significant changes through the app. The "Last updated" date reflects the most recent revision.</p>
 
   <h2>13. Contact</h2>
-  <p>For any questions, requests, or concerns: <a href="https://github.com/arda-yusuf-yilmaz/HelpHer/issues">github.com/arda-yusuf-yilmaz/HelpHer/issues</a></p>
+  <p>For any questions or concerns: <a href="https://github.com/arda-yusuf-yilmaz/HelpHer/issues">github.com/arda-yusuf-yilmaz/HelpHer/issues</a></p>
+  <p>Please do not post personal information publicly. If your request requires sharing personal data, we will direct you to a private communication channel.</p>
 
 </main>
 
