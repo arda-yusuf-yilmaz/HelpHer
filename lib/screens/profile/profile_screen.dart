@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
@@ -820,6 +821,24 @@ class _ProfileScreenState extends State<ProfileScreen> {
             onPressed: _addContact,
             icon: const Icon(Icons.person_add_alt_1),
             label: const Text('Add emergency contact'),
+          ),
+          // ── Legal ─────────────────────────────────────────────────────────
+          const SizedBox(height: 32),
+          const Divider(),
+          const SizedBox(height: 8),
+          ListTile(
+            contentPadding: EdgeInsets.zero,
+            leading: const Icon(Icons.privacy_tip_outlined,
+                color: AppColors.brand),
+            title: const Text('Privacy Policy'),
+            subtitle: const Text('How we collect and use your data'),
+            trailing: const Icon(Icons.open_in_new,
+                size: 16, color: AppColors.text2),
+            onTap: () => launchUrl(
+              Uri.parse(
+                  'https://arda-yusuf-yilmaz.github.io/HelpHer/privacy/'),
+              mode: LaunchMode.externalApplication,
+            ),
           ),
         ],
       ),

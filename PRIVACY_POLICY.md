@@ -139,8 +139,14 @@ You have the right to:
 - **Data portability** — receive your data in a structured, machine-readable format
 - **Withdraw consent** at any time, without affecting the lawfulness of
   processing before withdrawal
+- **Lodge a complaint** with a supervisory authority — if you believe your
+  rights have been violated, you may file a complaint with your national
+  data protection authority. For users in Turkey, this is the Personal Data
+  Protection Authority (Kişisel Verileri Koruma Kurumu, KVKK):
+  https://www.kvkk.gov.tr. For users in the EU, contact your local
+  supervisory authority.
 
-To exercise any of these rights, open an issue at:  
+To exercise any of the above rights, open an issue at:  
 https://github.com/arda-yusuf-yilmaz/HelpHer/issues
 
 We will respond to all requests within 30 days.
@@ -148,9 +154,15 @@ We will respond to all requests within 30 days.
 **To delete your account and all associated data**, use the account deletion
 option within the app, or contact us via the link above.
 
+## 8. Automated Decision-Making
+
+HelpHer does not use automated decision-making or profiling that produces
+legal or similarly significant effects on users. No decisions about you are
+made solely by automated means.
+
 ---
 
-## 8. Security
+## 9. Security
 
 We take the security of your data seriously:
 
@@ -166,7 +178,7 @@ please report it responsibly via our GitHub issues page.
 
 ---
 
-## 9. Children
+## 10. Children
 
 HelpHer is intended for adult users. We do not knowingly collect personal
 data from anyone under the age of 18. If you believe we have inadvertently
@@ -174,7 +186,7 @@ collected data from a minor, please contact us and we will delete it promptly.
 
 ---
 
-## 10. Changes to This Policy
+## 11. Changes to This Policy
 
 We may update this privacy policy from time to time. We will notify users
 of significant changes through the app. The "Last updated" date at the top
@@ -182,7 +194,7 @@ of this document reflects the most recent revision.
 
 ---
 
-## 11. Contact
+## 12. Contact
 
 For any questions, requests, or concerns regarding this privacy policy or
 your personal data:
