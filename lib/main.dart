@@ -76,7 +76,12 @@ Future<FirebaseBootstrapState> _initializeFirebase() async {
             ? const AndroidDebugProvider()
             : const AndroidPlayIntegrityProvider(),
         providerApple: kDebugMode
-            ? const AppleDebugProvider()
+            ? const AppleDebugProvider(
+                // Pass via --dart-define=APP_CHECK_DEBUG_TOKEN=<uuid>
+                // Never hardcode this value — token is registered in
+                // Firebase Console → App Check → Debug tokens.
+                debugToken: String.fromEnvironment('APP_CHECK_DEBUG_TOKEN'),
+              )
             : const AppleAppAttestProvider(),
         // The Firebase Flutter SDK has no production App Check provider for
         // Windows — WindowsDebugProvider is the only available option and must
