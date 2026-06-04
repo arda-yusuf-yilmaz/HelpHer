@@ -44,3 +44,8 @@ macos/Runner/GoogleService-Info.plist
 
 # Claude Code tooling state
 .claude/
+
+# Android signing
+android/key.properties
+*.jks
+*.keystore
