@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -32,6 +34,7 @@ class _AuthGateState extends State<AuthGate> {
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   AuthMode _authMode = AuthMode.signIn;
+  bool _agreedToPolicy = false;
   bool _isSigningIn = false;
   String? _authMessage;
   String? _eligibilityMessage;
@@ -418,7 +421,25 @@ class _AuthGateState extends State<AuthGate> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.favorite, color: AppColors.brand, size: 56),
+                  Container(
+                    width: 56,
+                    height: 56,
+                    decoration: BoxDecoration(
+                      color: AppColors.brand,
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Center(
+                      child: Text(
+                        'HH',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w700,
+                          letterSpacing: -0.5,
+                        ),
+                      ),
+                    ),
+                  ),
                   const SizedBox(height: 12),
                   Text(
                     'Welcome to HelpHer',
@@ -454,11 +475,54 @@ class _AuthGateState extends State<AuthGate> {
                       border: OutlineInputBorder(),
                     ),
                   ),
+                  if (isCreateAccount) ...[
+                    const SizedBox(height: 12),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.center,
+                      children: [
+                        Checkbox(
+                          value: _agreedToPolicy,
+                          onChanged: (v) =>
+                              setState(() => _agreedToPolicy = v ?? false),
+                          activeColor: AppColors.brand,
+                          materialTapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
+                        ),
+                        Expanded(
+                          child: RichText(
+                            text: TextSpan(
+                              style: const TextStyle(
+                                  color: AppColors.text2, fontSize: 13),
+                              children: [
+                                const TextSpan(
+                                    text: 'I have read and agree to the '),
+                                TextSpan(
+                                  text: 'Privacy Policy',
+                                  style: const TextStyle(
+                                    color: AppColors.brand,
+                                    decoration: TextDecoration.underline,
+                                  ),
+                                  recognizer: TapGestureRecognizer()
+                                    ..onTap = () => launchUrl(
+                                          Uri.parse(
+                                              'https://arda-yusuf-yilmaz.github.io/HelpHer/privacy/'),
+                                          mode: LaunchMode.externalApplication,
+                                        ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
                   const SizedBox(height: 16),
                   SizedBox(
                     width: double.infinity,
                     child: ElevatedButton(
-                      onPressed: isBusy || !isConfigured
+                      onPressed: isBusy ||
+                              !isConfigured ||
+                              (isCreateAccount && !_agreedToPolicy)
                           ? null
                           : _submitEmailAuth,
                       style: ElevatedButton.styleFrom(
@@ -485,6 +549,7 @@ class _AuthGateState extends State<AuthGate> {
                                   ? AuthMode.signIn
                                   : AuthMode.signUp;
                               _authMessage = null;
+                              _agreedToPolicy = false;
                             });
                           },
                     child: Text(
@@ -502,7 +567,9 @@ class _AuthGateState extends State<AuthGate> {
                   SizedBox(
                     width: double.infinity,
                     child: OutlinedButton.icon(
-                      onPressed: isBusy || !isConfigured
+                      onPressed: isBusy ||
+                              !isConfigured ||
+                              (isCreateAccount && !_agreedToPolicy)
                           ? null
                           : _signInWithGoogle,
                       icon: const Icon(Icons.login),

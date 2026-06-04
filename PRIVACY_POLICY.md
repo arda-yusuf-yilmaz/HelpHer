@@ -6,14 +6,6 @@
 
 ---
 
-> **Note:** This document is a draft prepared for legal review. It has not yet
-> been reviewed by a qualified lawyer and does not constitute legal advice.
-> Before onboarding users at scale, this policy should be reviewed by a legal
-> professional familiar with Turkish data protection law (KVKK) and, where
-> applicable, the EU General Data Protection Regulation (GDPR).
-
----
-
 ## 1. Who We Are
 
 HelpHer is a safety and community application designed to empower women to
@@ -80,7 +72,7 @@ analytics or advertising identifiers.
 
 ## 3. Why We Collect This Data
 
-| Data | Purpose | Legal Basis (KVKK) |
+| Data | Purpose | Legal Basis |
 |---|---|---|
 | Email, name | Account creation and authentication | Explicit consent / contract |
 | Username, profile photo | User identity within the app | Explicit consent |
@@ -136,9 +128,7 @@ such transfers are subject to appropriate safeguards.
 
 ## 7. Your Rights
 
-Under the Turkish Personal Data Protection Law (KVKK, Law No. 6698) and,
-where applicable, the EU General Data Protection Regulation (GDPR), you
-have the right to:
+You have the right to:
 
 - **Know** whether your personal data is being processed
 - **Request access** to your personal data
@@ -198,8 +188,3 @@ For any questions, requests, or concerns regarding this privacy policy or
 your personal data:
 
 https://github.com/arda-yusuf-yilmaz/HelpHer/issues
-
----
-
-*This privacy policy should be translated into Turkish before being
-presented to users in Turkey, as required under KVKK.*
