@@ -54,7 +54,7 @@ Future<void> main() async {
       defaultTargetPlatform != TargetPlatform.linux) {
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
   }
-  GoogleFonts.config.allowRuntimeFetching = false;
+  GoogleFonts.config.allowRuntimeFetching = true;
   final firebaseState = await _initializeFirebase();
   runApp(HelpHerApp(firebaseState: firebaseState));
 }
