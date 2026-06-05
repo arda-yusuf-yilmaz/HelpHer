@@ -135,7 +135,7 @@ jobs:
           rm /tmp/certificate.p12
 
       - name: Build macOS release (unsigned)
-        run: flutter build macos --release
+        run: flutter build macos --release --dart-define=APP_CHECK_DEBUG_TOKEN=${{ secrets.APP_CHECK_DEBUG_TOKEN }}
         env:
           FLUTTER_XCODE_CODE_SIGNING_ALLOWED: "NO"
           FLUTTER_XCODE_CODE_SIGNING_REQUIRED: "NO"

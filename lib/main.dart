@@ -75,11 +75,14 @@ Future<FirebaseBootstrapState> _initializeFirebase() async {
         providerAndroid: kDebugMode
             ? const AndroidDebugProvider()
             : const AndroidPlayIntegrityProvider(),
-        providerApple: kDebugMode
+        providerApple: (kDebugMode ||
+                defaultTargetPlatform == TargetPlatform.macOS)
             ? const AppleDebugProvider(
                 // Pass via --dart-define=APP_CHECK_DEBUG_TOKEN=<uuid>
                 // Never hardcode this value — token is registered in
                 // Firebase Console → App Check → Debug tokens.
+                // macOS release also uses debug provider until the provisioning
+                // profile is updated to include the App Attest capability.
                 debugToken: String.fromEnvironment('APP_CHECK_DEBUG_TOKEN'),
               )
             : const AppleAppAttestProvider(),
