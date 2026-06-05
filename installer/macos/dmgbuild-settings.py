@@ -21,9 +21,7 @@ icon_locations = {
     "Applications": (495, 195),
 }
 
-background = os.path.join(
-    os.path.dirname(os.path.abspath(__file__)), "dmg-background.png"
-)
+background = "installer/macos/dmg-background.png"
 
 show_status_bar   = False
 show_tab_view     = False
