@@ -208,7 +208,7 @@ jobs:
 
       - name: Install DMG tools and generate background
         run: |
-          pip3 install --quiet Pillow dmgbuild
+          pip3 install --quiet --break-system-packages Pillow dmgbuild
           python3 installer/macos/generate-dmg-background.py
 
       - name: Package macOS build (dmg)
