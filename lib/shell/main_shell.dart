@@ -392,6 +392,17 @@ class _MainShellState extends State<MainShell>
       }
       // All users subscribe to the SOS broadcast topic.
       await messaging.subscribeToTopic('sos_alerts');
+      // Handle tap when app was terminated (launched via notification).
+      final initial = await FirebaseMessaging.instance.getInitialMessage();
+      if (initial != null) {
+        WidgetsBinding.instance.addPostFrameCallback(
+          (_) => _handleMessageTap(initial),
+        );
+      }
+
+      // Handle tap when app was backgrounded.
+      FirebaseMessaging.onMessageOpenedApp.listen(_handleMessageTap);
+
       // Show a snackbar for messages that arrive while the app is in the
       // foreground (the OS tray handles background / terminated delivery).
       FirebaseMessaging.onMessage.listen((RemoteMessage message) {
@@ -419,6 +430,43 @@ class _MainShellState extends State<MainShell>
       });
     } catch (_) {
       // Non-critical — push notifications may not be available on this device.
+    }
+  }
+
+  // ── FCM tap navigation ────────────────────────────────────────────────────
+
+  /// Routes the user to the correct screen when they tap a push notification.
+  ///
+  /// Expected data payload keys (all optional):
+  ///   type: "chat" | "community" | "article" | "emergency" | "sos"
+  ///   roomId: Firestore chat-room document ID (type == "chat")
+  void _handleMessageTap(RemoteMessage message) {
+    if (!mounted) return;
+    final data = message.data;
+    final type = data['type'] as String?;
+
+    switch (type) {
+      case 'chat':
+        // Navigate to Chats tab; the ChatsScreen will handle roomId if needed.
+        _switchTab(2, animated: false);
+        final roomId = data['roomId'] as String?;
+        if (roomId != null && roomId.isNotEmpty) {
+          // Push the specific chat room after the tab settles.
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            Navigator.of(context).pushNamed('/chat/$roomId');
+          });
+        }
+      case 'community':
+        _switchTab(1, animated: false);
+      case 'article':
+        _openArticlesInCommunity();
+      case 'emergency':
+      case 'sos':
+        _switchTab(3, animated: false);
+      default:
+        // Unknown type — fall back to Home.
+        _switchTab(0, animated: false);
     }
   }
 
