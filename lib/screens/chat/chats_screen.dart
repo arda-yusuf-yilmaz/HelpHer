@@ -12,11 +12,17 @@ import 'chat_room_screen.dart';
 class ChatsScreen extends StatefulWidget {
   final String currentUserUid;
   final String currentUserName;
+  final Set<String> blockedUids;
+  final Future<void> Function(String uid) onBlockUser;
+  final Future<void> Function(String uid) onUnblockUser;
 
   const ChatsScreen({
     super.key,
     required this.currentUserUid,
     required this.currentUserName,
+    this.blockedUids = const {},
+    required this.onBlockUser,
+    required this.onUnblockUser,
   });
 
   @override
@@ -497,7 +503,16 @@ class _ChatsScreenState extends State<ChatsScreen> {
                 return const Center(child: CircularProgressIndicator());
               }
               final myUid = widget.currentUserUid;
-              final rooms = snapshot.data!.docs.toList()
+              // Hide DMs where the other person is blocked.
+              final rooms = snapshot.data!.docs.where((doc) {
+                final data = doc.data();
+                if ((data['type'] as String?) != 'direct') return true;
+                final members = List<String>.from(
+                    (data['members'] as List?)?.map((e) => e.toString()) ?? []);
+                final otherUid =
+                    members.firstWhere((m) => m != myUid, orElse: () => '');
+                return !widget.blockedUids.contains(otherUid);
+              }).toList()
                 ..sort((a, b) {
                   final aAt = a.data()['lastMessageAt'];
                   final bAt = b.data()['lastMessageAt'];

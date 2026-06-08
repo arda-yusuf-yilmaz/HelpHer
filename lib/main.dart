@@ -1,7 +1,9 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
+import 'package:firebase_analytics/firebase_analytics.dart';
 import 'package:firebase_app_check/firebase_app_check.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_crashlytics/firebase_crashlytics.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:window_manager/window_manager.dart';
@@ -75,14 +77,11 @@ Future<FirebaseBootstrapState> _initializeFirebase() async {
         providerAndroid: kDebugMode
             ? const AndroidDebugProvider()
             : const AndroidPlayIntegrityProvider(),
-        providerApple: (kDebugMode ||
-                defaultTargetPlatform == TargetPlatform.macOS)
+        providerApple: kDebugMode
             ? const AppleDebugProvider(
                 // Pass via --dart-define=APP_CHECK_DEBUG_TOKEN=<uuid>
                 // Never hardcode this value — token is registered in
                 // Firebase Console → App Check → Debug tokens.
-                // macOS release also uses debug provider until the provisioning
-                // profile is updated to include the App Attest capability.
                 debugToken: String.fromEnvironment('APP_CHECK_DEBUG_TOKEN'),
               )
             : const AppleAppAttestProvider(),
@@ -94,6 +93,20 @@ Future<FirebaseBootstrapState> _initializeFirebase() async {
         providerWindows: const WindowsDebugProvider(),
       );
     }
+    // Crashlytics — wire up Flutter and async error handlers.
+    // Skipped on web (Crashlytics is unsupported there).
+    if (!kIsWeb) {
+      FlutterError.onError =
+          FirebaseCrashlytics.instance.recordFlutterFatalError;
+      PlatformDispatcher.instance.onError = (error, stack) {
+        FirebaseCrashlytics.instance.recordError(error, stack, fatal: true);
+        return true;
+      };
+    }
+
+    // Analytics — enable data collection (respects user opt-out if set).
+    await FirebaseAnalytics.instance.setAnalyticsCollectionEnabled(true);
+
     return const FirebaseBootstrapState.ready();
   } on FirebaseException catch (error) {
     return FirebaseBootstrapState.failed(

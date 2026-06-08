@@ -66,6 +66,8 @@ class _MainShellState extends State<MainShell>
   final Map<String, Timestamp?> _lastSeenChatAt = {};
   // Deduplicates notification and SOS document IDs we've already toasted.
   final Set<String> _shownWindowsNotifIds = {};
+  // UIDs the current user has blocked.
+  Set<String> _blockedUids = const {};
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _windowsChatSub;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _windowsNotifSub;
   StreamSubscription<QuerySnapshot<Map<String, dynamic>>>? _windowsSosSub;
@@ -105,6 +107,7 @@ class _MainShellState extends State<MainShell>
         .snapshots();
     _loadArticles();
     _loadProfile();
+    _loadBlockList();
     _initE2eeSetup();
     _initFcm();
     if (!kIsWeb && defaultTargetPlatform == TargetPlatform.windows) {
@@ -390,8 +393,6 @@ class _MainShellState extends State<MainShell>
           'updatedAt': FieldValue.serverTimestamp(),
         });
       }
-      // All users subscribe to the SOS broadcast topic.
-      await messaging.subscribeToTopic('sos_alerts');
       // Handle tap when app was terminated (launched via notification).
       final initial = await FirebaseMessaging.instance.getInitialMessage();
       if (initial != null) {
@@ -447,16 +448,8 @@ class _MainShellState extends State<MainShell>
 
     switch (type) {
       case 'chat':
-        // Navigate to Chats tab; the ChatsScreen will handle roomId if needed.
         _switchTab(2, animated: false);
-        final roomId = data['roomId'] as String?;
-        if (roomId != null && roomId.isNotEmpty) {
-          // Push the specific chat room after the tab settles.
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            if (!mounted) return;
-            Navigator.of(context).pushNamed('/chat/$roomId');
-          });
-        }
+      case 'comment':
       case 'community':
         _switchTab(1, animated: false);
       case 'article':
@@ -465,7 +458,6 @@ class _MainShellState extends State<MainShell>
       case 'sos':
         _switchTab(3, animated: false);
       default:
-        // Unknown type — fall back to Home.
         _switchTab(0, animated: false);
     }
   }
@@ -822,6 +814,42 @@ class _MainShellState extends State<MainShell>
     }
   }
 
+  Future<void> _loadBlockList() async {
+    try {
+      final snap = await _firestore
+          .collection('users')
+          .doc(widget.currentUserUid)
+          .collection('blocks')
+          .get();
+      if (!mounted) return;
+      setState(() {
+        _blockedUids = snap.docs.map((d) => d.id).toSet();
+      });
+    } catch (_) {}
+  }
+
+  Future<void> _blockUser(String targetUid) async {
+    await _firestore
+        .collection('users')
+        .doc(widget.currentUserUid)
+        .collection('blocks')
+        .doc(targetUid)
+        .set({'blockedAt': FieldValue.serverTimestamp()});
+    if (mounted) setState(() => _blockedUids = {..._blockedUids, targetUid});
+  }
+
+  Future<void> _unblockUser(String targetUid) async {
+    await _firestore
+        .collection('users')
+        .doc(widget.currentUserUid)
+        .collection('blocks')
+        .doc(targetUid)
+        .delete();
+    if (mounted) {
+      setState(() => _blockedUids = _blockedUids.difference({targetUid}));
+    }
+  }
+
   Future<void> _loadArticles() async {
     try {
       final snapshot = await _articlesRef
@@ -868,12 +896,7 @@ class _MainShellState extends State<MainShell>
     required String commentAuthorName,
     required String commentText,
   }) {
-    _publishNotification(
-      type: AppNotificationType.comment,
-      title: 'New comment on your post',
-      body: '$commentAuthorName: $commentText',
-      targetUid: postAuthorUid,
-    );
+    // In-app notification is written by the onNewComment Cloud Function.
   }
 
   Future<void> _publishNotification({
@@ -1128,12 +1151,18 @@ class _MainShellState extends State<MainShell>
                     onArticleUpdated: _updateArticle,
                     onArticleDeleted: _deleteArticle,
                     switchToArticlesSerial: _switchToArticlesSerial,
+                    blockedUids: _blockedUids,
+                    onBlockUser: _blockUser,
+                    onUnblockUser: _unblockUser,
                   ),
                   ChatsScreen(
                     currentUserUid: widget.currentUserUid,
                     currentUserName: _profile.username != null
                         ? '@${_profile.username}'
                         : widget.currentUsername,
+                    blockedUids: _blockedUids,
+                    onBlockUser: _blockUser,
+                    onUnblockUser: _unblockUser,
                   ),
                   EmergencyScreen(
                     profile: _profile,

@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:math' show pi;
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -372,8 +373,24 @@ class _EmergencyScreenState extends State<EmergencyScreen>
     );
   }
 
+  String get _localEmergencyNumber {
+    if (kIsWeb) return '112';
+    final country = PlatformDispatcher.instance.locale.countryCode?.toUpperCase() ?? '';
+    return switch (country) {
+      'US' || 'CA' || 'MX' => '911',
+      'GB' || 'IE' => '999',
+      'AU' => '000',
+      'NZ' => '111',
+      'JP' || 'KR' => '119',
+      'CN' => '120',
+      'BR' => '190',
+      _ => '112', // EU standard, also works in most other countries
+    };
+  }
+
   Future<void> _openEmergencyLine() async {
-    final launched = await launchUrl(Uri(scheme: 'tel', path: '112'));
+    final number = _localEmergencyNumber;
+    final launched = await launchUrl(Uri(scheme: 'tel', path: number));
     if (!launched && mounted) {
       _showMessage('Could not open the emergency line on this device.');
     }
@@ -665,8 +682,8 @@ class _EmergencyScreenState extends State<EmergencyScreen>
                   ),
                 ),
               _buildResourceTile(
-                'Emergency Line',
-                'Use your local police emergency line',
+                'Emergency Line ($_localEmergencyNumber)',
+                'Calls your local emergency services',
                 Icons.local_police_outlined,
                 const Color(0xFFE8EAF6),
                 onTap: _openEmergencyLine,

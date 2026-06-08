@@ -27,6 +27,9 @@ class CommunityScreen extends StatefulWidget {
   final FutureOr<void> Function(String) onArticleDeleted;
   // Incremented by the parent each time it wants to switch to the Articles tab.
   final int switchToArticlesSerial;
+  final Set<String> blockedUids;
+  final Future<void> Function(String uid) onBlockUser;
+  final Future<void> Function(String uid) onUnblockUser;
 
   const CommunityScreen({
     super.key,
@@ -40,6 +43,9 @@ class CommunityScreen extends StatefulWidget {
     required this.onArticleUpdated,
     required this.onArticleDeleted,
     this.switchToArticlesSerial = 0,
+    this.blockedUids = const {},
+    required this.onBlockUser,
+    required this.onUnblockUser,
   });
 
   @override
@@ -58,6 +64,7 @@ class _CommunityScreenState extends State<CommunityScreen>
       _firestore.collection('articles');
 
   late final TabController _tabController;
+  int _postLimit = 20;
 
   @override
   void initState() {
@@ -663,6 +670,90 @@ class _CommunityScreenState extends State<CommunityScreen>
     contentController.dispose();
   }
 
+  Future<void> _reportPost(CommunityPost post) async {
+    String? selectedReason;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setLocal) => AlertDialog(
+          title: const Text('Report post'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const Text('Why are you reporting this post?'),
+              const SizedBox(height: 12),
+              RadioGroup<String>(
+                groupValue: selectedReason,
+                onChanged: (v) => setLocal(() => selectedReason = v),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (final reason in [
+                      'Spam',
+                      'Harassment or bullying',
+                      'Hate speech',
+                      'Misinformation',
+                      'Other',
+                    ])
+                      RadioListTile<String>(
+                        value: reason,
+                        title: Text(reason),
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(ctx, false),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed:
+                  selectedReason == null ? null : () => Navigator.pop(ctx, true),
+              child: const Text('Submit'),
+            ),
+          ],
+        ),
+      ),
+    );
+    if (confirmed != true || selectedReason == null || !mounted) return;
+    try {
+      await _firestore.collection('reports').add({
+        'postId': post.id,
+        'postAuthorUid': post.authorUid,
+        'postAuthorName': post.author,
+        'postContentPreview': post.content.length > 200
+            ? '${post.content.substring(0, 200)}…'
+            : post.content,
+        'reporterUid': widget.currentUserUid,
+        'reason': selectedReason,
+        'status': 'open',
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Report submitted. Thank you.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Could not submit report. Please try again.'),
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
+  }
+
   Future<void> _deletePost(String postId) async {
     await _postsCollection.doc(postId).delete();
   }
@@ -936,38 +1027,61 @@ class _CommunityScreenState extends State<CommunityScreen>
                             ),
                           ),
                         ),
-                        if (canManagePost)
-                          PopupMenuButton<String>(
-                            onSelected: (value) async {
-                              if (value == 'edit') {
-                                _openEditPostSheet(post);
-                              } else if (value == 'delete') {
-                                final confirmed = await _confirmDelete(
-                                  title: 'Delete post?',
-                                  message:
-                                      'Your post and its comments will be removed permanently.',
-                                );
-                                if (!confirmed) {
-                                  return;
-                                }
-                                await _deletePost(post.id);
+                        PopupMenuButton<String>(
+                          onSelected: (value) async {
+                            if (value == 'edit') {
+                              _openEditPostSheet(post);
+                            } else if (value == 'delete') {
+                              final confirmed = await _confirmDelete(
+                                title: 'Delete post?',
+                                message:
+                                    'Your post and its comments will be removed permanently.',
+                              );
+                              if (!confirmed) return;
+                              await _deletePost(post.id);
+                            } else if (value == 'report') {
+                              await _reportPost(post);
+                            } else if (value == 'block') {
+                              final isBlocked =
+                                  widget.blockedUids.contains(post.authorUid);
+                              if (isBlocked) {
+                                await widget.onUnblockUser(post.authorUid);
+                              } else {
+                                await widget.onBlockUser(post.authorUid);
                               }
-                            },
-                            icon: const Icon(
-                              Icons.more_horiz,
-                              color: AppColors.text2,
-                            ),
-                            itemBuilder: (context) => const [
-                              PopupMenuItem<String>(
+                            }
+                          },
+                          icon: const Icon(
+                            Icons.more_horiz,
+                            color: AppColors.text2,
+                          ),
+                          itemBuilder: (context) => [
+                            if (canManagePost) ...[
+                              const PopupMenuItem<String>(
                                 value: 'edit',
                                 child: Text('Edit'),
                               ),
-                              PopupMenuItem<String>(
+                              const PopupMenuItem<String>(
                                 value: 'delete',
                                 child: Text('Delete'),
                               ),
                             ],
-                          ),
+                            if (!canManagePost) ...[
+                              const PopupMenuItem<String>(
+                                value: 'report',
+                                child: Text('Report'),
+                              ),
+                              PopupMenuItem<String>(
+                                value: 'block',
+                                child: Text(
+                                  widget.blockedUids.contains(post.authorUid)
+                                      ? 'Unblock user'
+                                      : 'Block user',
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
                       ],
                     ),
                     const SizedBox(height: 10),
@@ -1222,6 +1336,7 @@ class _CommunityScreenState extends State<CommunityScreen>
                       >(
                         stream: _postsCollection
                             .orderBy('createdAt', descending: true)
+                            .limit(_postLimit)
                             .snapshots(),
                         builder: (context, snapshot) {
                           if (!snapshot.hasData) {
@@ -1238,7 +1353,9 @@ class _CommunityScreenState extends State<CommunityScreen>
                               ),
                             );
                           }
-                          final posts = docs.map((doc) {
+                          final posts = docs.where((doc) =>
+                              !widget.blockedUids.contains(
+                                  (doc.data()['authorUid'] as String?) ?? '')).map((doc) {
                             final data = doc.data();
                             final createdAtValue = data['createdAt'];
                             final createdAt = createdAtValue is Timestamp
@@ -1272,9 +1389,27 @@ class _CommunityScreenState extends State<CommunityScreen>
                               16,
                               16,
                             ),
-                            itemCount: posts.length,
-                            itemBuilder: (context, index) =>
-                                _buildPostCard(posts[index]),
+                            itemCount: posts.length + 1,
+                            itemBuilder: (context, index) {
+                              if (index < posts.length) {
+                                return _buildPostCard(posts[index]);
+                              }
+                              // Load-more button — only shown when the
+                              // current page is full (might be more posts).
+                              if (posts.length < _postLimit) {
+                                return const SizedBox.shrink();
+                              }
+                              return Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 8),
+                                child: Center(
+                                  child: TextButton(
+                                    onPressed: () =>
+                                        setState(() => _postLimit += 20),
+                                    child: const Text('Load more'),
+                                  ),
+                                ),
+                              );
+                            },
                           );
                         },
                       ),

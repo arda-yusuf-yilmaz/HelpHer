@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
@@ -55,9 +56,24 @@ class _ArticleDetailScreenState extends State<ArticleDetailScreen> {
   @override
   Widget build(BuildContext context) {
     final isComputer = isComputerPlatform(Theme.of(context).platform);
+    // On macOS the title bar is hidden and traffic-light buttons overlay
+    // Flutter content — push the AppBar down to clear them.
+    // Windows uses a custom title bar rendered inside the sidebar so no inset needed.
+    final isMacOS = !kIsWeb && defaultTargetPlatform == TargetPlatform.macOS;
+    const macOSInset = 28.0;
     return Scaffold(
       appBar: AppBar(
-        title: Text(widget.article.category),
+        toolbarHeight: isMacOS ? kToolbarHeight + macOSInset : kToolbarHeight,
+        leading: isMacOS
+            ? Padding(
+                padding: const EdgeInsets.only(top: macOSInset),
+                child: const BackButton(),
+              )
+            : null,
+        title: Padding(
+          padding: EdgeInsets.only(top: isMacOS ? macOSInset : 0),
+          child: Text(widget.article.category),
+        ),
         surfaceTintColor: Colors.transparent,
       ),
       body: Align(

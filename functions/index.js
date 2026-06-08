@@ -76,6 +76,160 @@ exports.sendOtp = onCall(
   }
 );
 
+// ─── 2FA helpers ─────────────────────────────────────────────────────────────
+
+/**
+ * Sends a 2FA OTP to the signed-in user's own email address.
+ * Unlike sendOtp (which takes email from data for sign-in), this reads the
+ * email from the verified auth token so the caller cannot target other inboxes.
+ */
+exports.send2faOtp = onCall(
+  { secrets: [GMAIL_USER, GMAIL_PASS], enforceAppCheck: true },
+  async (request) => {
+    if (!request.auth) {
+      throw new HttpsError("unauthenticated", "Must be signed in.");
+    }
+    const email = request.auth.token.email?.trim().toLowerCase();
+    if (!email) {
+      throw new HttpsError("failed-precondition", "No email on this account.");
+    }
+
+    const otpRef = admin.firestore().collection("otps").doc(email);
+    const existing = await otpRef.get();
+    const existingData = existing.data();
+    const cooldownMs = 60 * 1000;
+    if (existingData?.lastSentAt && Date.now() - existingData.lastSentAt < cooldownMs) {
+      throw new HttpsError(
+        "resource-exhausted",
+        "Please wait a minute before requesting a new code."
+      );
+    }
+
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    const expiresAt = Date.now() + 10 * 60 * 1000;
+    const codeHash = hashCode(code);
+
+    await otpRef.set({
+      codeHash,
+      expiresAt,
+      attempts: 0,
+      lastSentAt: Date.now(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+
+    const transporter = nodemailer.createTransport({
+      service: "gmail",
+      auth: { user: GMAIL_USER.value(), pass: GMAIL_PASS.value() },
+    });
+
+    await transporter.sendMail({
+      from: `"HelpHer" <${GMAIL_USER.value()}>`,
+      to: email,
+      subject: "Your HelpHer verification code",
+      text: `Your HelpHer verification code is: ${code}\n\nExpires in 10 minutes. If you did not sign in to HelpHer, change your password immediately.`,
+      html: `
+        <div style="font-family:sans-serif;max-width:480px;margin:auto">
+          <h2 style="color:#6B4F7C">Your HelpHer verification code</h2>
+          <p style="font-size:36px;font-weight:bold;letter-spacing:8px;color:#6B4F7C">
+            ${code}
+          </p>
+          <p>This code expires in <strong>10 minutes</strong>.</p>
+          <p style="color:#999;font-size:12px">
+            If you did not sign in to HelpHer, change your password immediately.
+          </p>
+        </div>
+      `,
+    });
+
+    return { success: true };
+  }
+);
+
+/**
+ * Verifies a 2FA OTP for an already-authenticated user.
+ * Returns { success: true } on match; throws on failure.
+ */
+exports.verify2fa = onCall({ enforceAppCheck: true }, async (request) => {
+  if (!request.auth) {
+    throw new HttpsError("unauthenticated", "Must be signed in.");
+  }
+
+  const email = request.auth.token.email?.trim().toLowerCase();
+  const code = (request.data.code || "").trim();
+
+  if (!email || !/^\d{6}$/.test(code)) {
+    throw new HttpsError("invalid-argument", "A 6-digit code is required.");
+  }
+
+  const ref = admin.firestore().collection("otps").doc(email);
+  const snap = await ref.get();
+
+  if (!snap.exists) {
+    throw new HttpsError("not-found", "Invalid or expired code.");
+  }
+
+  const { codeHash, expiresAt, attempts } = snap.data();
+
+  if (attempts >= 5) {
+    await ref.delete();
+    throw new HttpsError(
+      "resource-exhausted",
+      "Too many attempts. Please request a new code."
+    );
+  }
+
+  if (Date.now() > expiresAt) {
+    await ref.delete();
+    throw new HttpsError("deadline-exceeded", "Invalid or expired code.");
+  }
+
+  if (hashCode(code) !== codeHash) {
+    await ref.update({ attempts: admin.firestore.FieldValue.increment(1) });
+    throw new HttpsError("unauthenticated", "Invalid or expired code.");
+  }
+
+  await ref.delete();
+  return { success: true };
+});
+
+// ─── Account deletion ─────────────────────────────────────────────────────────
+
+/**
+ * Permanently deletes the caller's account: Firestore data (including
+ * subcollections), Storage profile photo, username reservation, and
+ * Firebase Auth record.  Must be called last — once Auth is deleted
+ * the session token is invalid.
+ */
+exports.deleteAccount = onCall({ enforceAppCheck: true }, async (request) => {
+  const uid = request.auth?.uid;
+  if (!uid) throw new HttpsError("unauthenticated", "Must be signed in.");
+
+  const db = admin.firestore();
+
+  // users/{uid} and all subcollections (fcmTokens, notificationReads, privateData)
+  await db.recursiveDelete(db.collection("users").doc(uid));
+
+  // Other top-level documents
+  const batch = db.batch();
+  batch.delete(db.collection("userDirectory").doc(uid));
+  const usernameSnap = await db
+    .collection("usernames")
+    .where("uid", "==", uid)
+    .get();
+  usernameSnap.docs.forEach((doc) => batch.delete(doc.ref));
+  await batch.commit();
+
+  // Storage profile photo (best-effort — may not exist)
+  try {
+    await admin.storage().bucket().file(`users/${uid}/profile.jpg`).delete();
+  } catch (_) {}
+
+  // Firebase Auth — must be last; invalidates the caller's session token
+  await admin.auth().deleteUser(uid);
+
+  return { success: true };
+});
+
 exports.verifyOtp = onCall({ enforceAppCheck: true }, async (request) => {
   if (request.app == null) {
     throw new HttpsError("failed-precondition", "App Check token is missing.");
@@ -228,7 +382,7 @@ exports.onNewChatMessage = onDocumentCreated(
           tokens,
           uid,
           { title: senderName, body: body || "New message" },
-          { type: "message", roomId: event.params.roomId }
+          { type: "chat", roomId: event.params.roomId }
         );
       })
     );
@@ -249,7 +403,6 @@ exports.onNewComment = onDocumentCreated(
       ? data.content.slice(0, 120)
       : "";
 
-    // Fetch the parent post to find who to notify.
     const postSnap = await admin
       .firestore()
       .collection("communityPosts")
@@ -260,6 +413,7 @@ exports.onNewComment = onDocumentCreated(
     const postAuthorUid = postSnap.data()?.authorUid;
     if (!postAuthorUid || postAuthorUid === commentAuthorUid) return;
 
+    // FCM push
     const tokens = await getTokensForUid(postAuthorUid);
     await sendPushToTokens(
       tokens,
@@ -270,6 +424,16 @@ exports.onNewComment = onDocumentCreated(
       },
       { type: "comment", postId: event.params.postId }
     );
+
+    // In-app notification (written server-side so client rules cannot be abused)
+    await admin.firestore().collection("notifications").add({
+      type: "comment",
+      title: "New comment on your post",
+      body: `${commentAuthorName}: ${commentText}`,
+      targetUid: postAuthorUid,
+      createdByUid: commentAuthorUid,
+      createdAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
   }
 );
 
@@ -277,34 +441,10 @@ exports.onNewComment = onDocumentCreated(
 
 exports.onSosAlert = onDocumentCreated(
   "sosAlerts/{alertId}",
-  async (event) => {
-    const data = event.data?.data();
-    if (!data) return;
-
-    const senderName = data.senderName ?? "A HelpHer user";
-    const locationLink = data.locationLink ?? null;
-    const body = locationLink
-      ? `${senderName} needs help! Tap to see location.`
-      : `${senderName} needs help! Please check on them.`;
-
-    // Broadcast to the sos_alerts topic — all subscribed devices receive this.
-    await admin.messaging().send({
-      topic: "sos_alerts",
-      notification: {
-        title: "🚨 SOS Alert",
-        body,
-      },
-      data: {
-        type: "sos",
-        alertId: event.params.alertId,
-        ...(locationLink ? { locationLink } : {}),
-      },
-      android: { priority: "high" },
-      apns: {
-        payload: {
-          aps: { sound: "default", badge: 1, "content-available": 1 },
-        },
-      },
-    });
+  async (_event) => {
+    // SOS alerts are delivered via SMS to the user's emergency contacts
+    // (handled entirely client-side).  Broadcasting an FCM push to all
+    // app users would expose the sender's identity and location to strangers,
+    // so no FCM is sent here.
   }
 );

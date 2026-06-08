@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:image_picker/image_picker.dart';
@@ -11,6 +12,7 @@ import '../../app.dart';
 import '../../models/user_profile.dart';
 import '../../utils.dart';
 import '../../widgets/profile_initials_avatar.dart';
+import '../admin/reports_screen.dart';
 
 class ProfileScreen extends StatefulWidget {
   final UserProfileData profile;
@@ -53,6 +55,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
   final TextEditingController _userSearchController = TextEditingController();
   bool _isLookingUpEditor = false;
   bool _isUploadingPhoto = false;
+  bool _isDeletingAccount = false;
   String _userSearchQuery = '';
 
   @override
@@ -377,6 +380,50 @@ class _ProfileScreenState extends State<ProfileScreen> {
     );
   }
 
+  Future<void> _deleteAccount() async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Delete account?'),
+        content: const Text(
+          'This permanently deletes your account and all associated data. '
+          'This cannot be undone.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            child: const Text('Delete permanently'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+
+    setState(() => _isDeletingAccount = true);
+    try {
+      await FirebaseFunctions.instance
+          .httpsCallable('deleteAccount')
+          .call<Map<String, dynamic>>();
+      // Auth session is invalidated server-side; sign out locally to clear state.
+      if (mounted) widget.onSignOut();
+    } on FirebaseFunctionsException catch (e) {
+      if (mounted) {
+        setState(() => _isDeletingAccount = false);
+        _showSnack(e.message ?? 'Could not delete account. Please try again.');
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _isDeletingAccount = false);
+        _showSnack('Could not delete account. Please check your connection.');
+      }
+    }
+  }
+
   Future<void> _setEditorStatusForUid({
     required String targetUid,
     required bool isEditor,
@@ -595,13 +642,46 @@ class _ProfileScreenState extends State<ProfileScreen> {
           OutlinedButton.icon(
             onPressed: widget.onSignOut,
             icon: const Icon(Icons.logout),
-            label: const Text('Sign out from Google'),
+            label: const Text('Sign out'),
           ),
           if (widget.isAdmin) ...[
             const SizedBox(height: 24),
+            const Divider(),
+            const SizedBox(height: 8),
             const Text(
-              'Editor Access (Admin)',
-              style: TextStyle(fontSize: 20, fontWeight: FontWeight.w600),
+              'ADMIN',
+              style: TextStyle(
+                color: AppColors.text2,
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                letterSpacing: 1.2,
+              ),
+            ),
+            const SizedBox(height: 10),
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AppColors.brandLight,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(Icons.flag_outlined, color: AppColors.brand),
+              ),
+              title: const Text('Community Reports',
+                  style: TextStyle(fontWeight: FontWeight.w600)),
+              subtitle: const Text('Review and action flagged posts'),
+              trailing: const Icon(Icons.chevron_right),
+              onTap: () => Navigator.of(context).push(
+                MaterialPageRoute<void>(
+                  builder: (_) => const ReportsScreen(),
+                ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              'Editor Access',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 10),
             Text(
@@ -853,6 +933,41 @@ class _ProfileScreenState extends State<ProfileScreen> {
               mode: LaunchMode.externalApplication,
             ),
           ),
+          // ── Danger zone ───────────────────────────────────────────────────
+          const SizedBox(height: 32),
+          const Divider(),
+          const SizedBox(height: 8),
+          const Text(
+            'DANGER ZONE',
+            style: TextStyle(
+              color: Colors.red,
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1.2,
+            ),
+          ),
+          const SizedBox(height: 10),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _isDeletingAccount ? null : _deleteAccount,
+              icon: _isDeletingAccount
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(
+                          strokeWidth: 2, color: Colors.red),
+                    )
+                  : const Icon(Icons.delete_forever_outlined),
+              label: Text(
+                  _isDeletingAccount ? 'Deleting…' : 'Delete my account'),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: Colors.red,
+                side: const BorderSide(color: Colors.red),
+              ),
+            ),
+          ),
+          const SizedBox(height: 24),
         ],
       ),
       ),

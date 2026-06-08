@@ -49,6 +49,11 @@ service cloud.firestore {
       allow read, write, delete: if signedIn() && request.auth.uid == userId;
     }
 
+    // Block list — users manage their own; nobody else can read it.
+    match /users/{userId}/blocks/{blockedUid} {
+      allow read, write, delete: if signedIn() && request.auth.uid == userId;
+    }
+
     // Encrypted E2EE key backup — only the owning user can read or write.
     match /users/{userId}/privateData/{doc} {
       allow read, write: if signedIn() && request.auth.uid == userId;
@@ -99,8 +104,18 @@ service cloud.firestore {
             resource.data.targetUid == null ||
             resource.data.targetUid == request.auth.uid
           );
+      // Clients may only create broadcast notifications (no targetUid).
+      // Targeted notifications (comment alerts etc.) are written by Cloud
+      // Functions using the Admin SDK, which bypasses these rules.
       allow create: if isEligibleUser() &&
-          request.resource.data.createdByUid == request.auth.uid;
+          request.resource.data.createdByUid == request.auth.uid &&
+          !request.resource.data.keys().hasAny(['targetUid']) &&
+          request.resource.data.type in ['comment', 'article', 'message', 'sos'] &&
+          request.resource.data.title is string &&
+          request.resource.data.title.size() <= 200 &&
+          request.resource.data.body is string &&
+          request.resource.data.body.size() <= 500 &&
+          request.resource.data.keys().hasAll(['type', 'title', 'body', 'createdByUid', 'createdAt']);
       allow update, delete: if false;
     }
 
@@ -196,6 +211,16 @@ service cloud.firestore {
       allow create: if isEligibleUser() &&
           request.resource.data.senderUid == request.auth.uid;
       allow update, delete: if false;
+    }
+
+    // Reports — eligible users can file; only admins can read/triage.
+    match /reports/{reportId} {
+      allow create: if isEligibleUser() &&
+          request.resource.data.reporterUid == request.auth.uid &&
+          request.resource.data.reason is string &&
+          request.resource.data.reason.size() <= 300 &&
+          request.resource.data.keys().hasAll(['postId', 'reporterUid', 'reason', 'createdAt']);
+      allow read, update, delete: if isAdmin();
     }
 
     match /{document=**} {
