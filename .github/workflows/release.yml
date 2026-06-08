@@ -370,6 +370,8 @@ jobs:
           # Stamp the name into ExportOptions.plist so Xcode finds it by name
           /usr/libexec/PlistBuddy -c "Set :teamID ${{ secrets.APPLE_TEAM_ID }}" ios/ExportOptions.plist
           /usr/libexec/PlistBuddy -c "Set :provisioningProfiles:com.helpher.app $PP_NAME" ios/ExportOptions.plist
+          # Export for use in the build step
+          echo "IOS_PP_NAME=$PP_NAME" >> $GITHUB_ENV
 
       - name: Disable Swift Package Manager
         run: flutter config --no-enable-swift-package-manager
@@ -391,6 +393,14 @@ jobs:
         run: flutter test
 
       - name: Build iOS IPA
+        env:
+          # Force manual signing during the xcodebuild archive phase so Xcode
+          # doesn't try to contact Apple servers for automatic signing (which
+          # fails on CI with "No Accounts").
+          FLUTTER_XCODE_CODE_SIGN_STYLE: Manual
+          FLUTTER_XCODE_CODE_SIGN_IDENTITY: "Apple Distribution"
+          FLUTTER_XCODE_PROVISIONING_PROFILE_SPECIFIER: ${{ env.IOS_PP_NAME }}
+          FLUTTER_XCODE_DEVELOPMENT_TEAM: ${{ secrets.APPLE_TEAM_ID }}
         run: flutter build ipa --release --export-options-plist=ios/ExportOptions.plist
 
       - name: Upload to TestFlight
