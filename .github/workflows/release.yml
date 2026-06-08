@@ -344,9 +344,11 @@ jobs:
           security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           echo "$IOS_CERTIFICATE" | base64 --decode > /tmp/ios-cert.p12
           security import /tmp/ios-cert.p12 -k "$KEYCHAIN_PATH" \
-            -P "$IOS_CERTIFICATE_PASSWORD" -T /usr/bin/codesign
-          security list-keychain -d user -s "$KEYCHAIN_PATH"
-          security set-key-partition-list -S apple-tool:,apple: -s \
+            -P "$IOS_CERTIFICATE_PASSWORD" \
+            -T /usr/bin/codesign -T /usr/bin/xcodebuild
+          # Keep login.keychain-db in the search list so xcodebuild can find the cert
+          security list-keychain -d user -s "$KEYCHAIN_PATH" login.keychain-db
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s \
             -k "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
           rm /tmp/ios-cert.p12
 
