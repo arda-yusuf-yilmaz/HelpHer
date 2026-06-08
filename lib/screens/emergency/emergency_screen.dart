@@ -139,14 +139,16 @@ class _EmergencyScreenState extends State<EmergencyScreen>
     }
   }
 
-  void _writeSosAlert(String? locationLink) {
+  void _writeSosAlert() {
     Future(() async {
+      // locationLink is intentionally excluded — GPS coordinates are sent
+      // privately via SMS to emergency contacts only, not stored in Firestore
+      // where all eligible users could read them.
       final payload = <String, dynamic>{
         'senderUid': widget.currentUserUid,
         'senderName': widget.profile.name,
         'createdAt': FieldValue.serverTimestamp(),
       };
-      if (locationLink != null) payload['locationLink'] = locationLink;
       await FirebaseFirestore.instance.collection('sosAlerts').add(payload);
     }).catchError((_) {});
   }
@@ -154,7 +156,7 @@ class _EmergencyScreenState extends State<EmergencyScreen>
   Future<void> _sendAlertSmsToAll() async {
     final platform = Theme.of(context).platform;
     final locationLink = await _getLocationLink();
-    _writeSosAlert(locationLink);
+    _writeSosAlert();
     final locationSuffix =
         locationLink != null ? ' My location: $locationLink' : '';
     if (!supportsNativeSms(platform)) {

@@ -138,7 +138,11 @@ jobs:
           rm /tmp/certificate.p12
 
       - name: Build macOS release (unsigned)
-        run: flutter build macos --release --dart-define=APP_CHECK_DEBUG_TOKEN=${{ secrets.APP_CHECK_DEBUG_TOKEN }}
+        run: flutter build macos --release
+        # APP_CHECK_DEBUG_TOKEN is intentionally omitted — passing it via
+        # --dart-define embeds the UUID as a string constant in the release
+        # binary, allowing anyone to extract and reuse it. Release builds use
+        # AppleAppAttestProvider which needs no debug token.
         env:
           FLUTTER_XCODE_CODE_SIGNING_ALLOWED: "NO"
           FLUTTER_XCODE_CODE_SIGNING_REQUIRED: "NO"

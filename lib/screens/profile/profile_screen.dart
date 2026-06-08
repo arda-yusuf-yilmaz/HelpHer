@@ -151,7 +151,9 @@ class _ProfileScreenState extends State<ProfileScreen> {
             _firestore.collection('userDirectory').doc(widget.currentUserUid),
             {
               'uid': widget.currentUserUid,
-              'email': email,
+              // email is intentionally excluded — userDirectory is readable by
+              // all eligible users; email is only stored in users/{uid} which
+              // is restricted to the owner and admins.
               if (displayName.isNotEmpty) 'displayName': displayName,
               'username': FieldValue.delete(),
               'usernameLower': FieldValue.delete(),
@@ -231,7 +233,7 @@ class _ProfileScreenState extends State<ProfileScreen> {
           _firestore.collection('userDirectory').doc(widget.currentUserUid),
           {
             'uid': widget.currentUserUid,
-            'email': email,
+            // email excluded — see comment above
             if (displayName.isNotEmpty) 'displayName': displayName,
             'username': key,
             'usernameLower': key,
