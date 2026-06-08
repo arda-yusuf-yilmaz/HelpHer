@@ -55,6 +55,7 @@ dependencies:
   firebase_crashlytics: ^5.2.3
   firebase_analytics: ^12.4.2
   upgrader: ^13.5.0
+  version: ^3.0.2
 
 dev_dependencies:
   flutter_test:
