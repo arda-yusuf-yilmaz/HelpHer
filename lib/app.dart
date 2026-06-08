@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:upgrader/upgrader.dart';
 
 import 'models/user_profile.dart';
 import 'screens/auth/auth_gate.dart';
+import 'utils/github_releases_store.dart';
 
 // ignore: constant_identifier_names
 const kWebAppCheckRecaptchaSiteKey = String.fromEnvironment(
@@ -83,9 +85,30 @@ class HelpHerApp extends StatelessWidget {
         scaffoldBackgroundColor: const Color(0xFFF7F4FA),
         textTheme: GoogleFonts.dmSansTextTheme(),
       ),
-      home: AuthGate(firebaseState: firebaseState),
+      home: _maybeWithUpgrader(AuthGate(firebaseState: firebaseState)),
     );
   }
+}
+
+// Shows an update dialog on desktop GitHub builds; no-op everywhere else.
+Widget _maybeWithUpgrader(Widget child) {
+  if (kIsWeb ||
+      (defaultTargetPlatform != TargetPlatform.macOS &&
+          defaultTargetPlatform != TargetPlatform.windows)) {
+    return child;
+  }
+  final store = GitHubReleasesStore(
+    owner: 'arda-yusuf-yilmaz',
+    repo: 'HelpHer',
+  );
+  final upgrader = Upgrader(
+    storeController: UpgraderStoreController(
+      onMacOS: () => store,
+      onWindows: () => store,
+    ),
+    durationUntilAlertAgain: const Duration(days: 1),
+  );
+  return UpgradeAlert(upgrader: upgrader, child: child);
 }
 
 class _NoOverscrollBehavior extends MaterialScrollBehavior {
