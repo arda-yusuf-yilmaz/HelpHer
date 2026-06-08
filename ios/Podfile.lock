@@ -1204,7 +1204,7 @@ PODS:
   - BoringSSL-GRPC/Implementation (0.0.37):
     - BoringSSL-GRPC/Interface (= 0.0.37)
   - BoringSSL-GRPC/Interface (0.0.37)
-  - cloud_firestore (6.4.1):
+  - cloud_firestore (6.5.0):
     - Firebase/Firestore (= 12.14.0)
     - firebase_core
     - Flutter
@@ -1567,6 +1567,9 @@ PODS:
   - PromisesSwift (2.4.0):
     - PromisesObjC (= 2.4.0)
   - RecaptchaInterop (101.0.0)
+  - shared_preferences_foundation (0.0.1):
+    - Flutter
+    - FlutterMacOS
   - url_launcher_ios (0.0.1):
     - Flutter
 
@@ -1589,6 +1592,7 @@ DEPENDENCIES:
   - google_sign_in_ios (from `.symlinks/plugins/google_sign_in_ios/darwin`)
   - image_picker_ios (from `.symlinks/plugins/image_picker_ios/ios`)
   - package_info_plus (from `.symlinks/plugins/package_info_plus/ios`)
+  - shared_preferences_foundation (from `.symlinks/plugins/shared_preferences_foundation/darwin`)
   - url_launcher_ios (from `.symlinks/plugins/url_launcher_ios/ios`)
 
 SPEC REPOS:
@@ -1669,6 +1673,8 @@ EXTERNAL SOURCES:
     :path: ".symlinks/plugins/image_picker_ios/ios"
   package_info_plus:
     :path: ".symlinks/plugins/package_info_plus/ios"
+  shared_preferences_foundation:
+    :path: ".symlinks/plugins/shared_preferences_foundation/darwin"
   url_launcher_ios:
     :path: ".symlinks/plugins/url_launcher_ios/ios"
 
@@ -1677,7 +1683,7 @@ SPEC CHECKSUMS:
   AppAuth: 1c1a8afa7e12f2ec3a294d9882dfa5ab7d3cb063
   AppCheckCore: cc8fd0a3a230ddd401f326489c99990b013f0c4f
   BoringSSL-GRPC: dded2a44897e45f28f08ae87a55ee4bcd19bc508
-  cloud_firestore: 766684e944226a9d7384d7a2a630effa6615c186
+  cloud_firestore: 0b00f29ae2bb05adf7b0624b4aa883861a59761d
   cloud_functions: 23fe3d2217909a9ab51d7580c6f2e33389841249
   file_selector_ios: ec57ec07954363dd730b642e765e58f199bb621a
   Firebase: 7cc10425300768ec86292688af5cb228f0604bde
@@ -1729,6 +1735,7 @@ SPEC CHECKSUMS:
   PromisesObjC: f5707f49cb48b9636751c5b2e7d227e43fba9f47
   PromisesSwift: 9d77319bbe72ebf6d872900551f7eeba9bce2851
   RecaptchaInterop: 11e0b637842dfb48308d242afc3f448062325aba
+  shared_preferences_foundation: 7036424c3d8ec98dfe75ff1667cb0cd531ec82bb
   url_launcher_ios: 7a95fa5b60cc718a708b8f2966718e93db0cef1b
 
 PODFILE CHECKSUM: f337659620937561f8ab11bf6a23747e3a5dfced

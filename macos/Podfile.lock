@@ -1204,7 +1204,7 @@ PODS:
   - BoringSSL-GRPC/Implementation (0.0.37):
     - BoringSSL-GRPC/Interface (= 0.0.37)
   - BoringSSL-GRPC/Interface (0.0.37)
-  - cloud_firestore (6.4.1):
+  - cloud_firestore (6.5.0):
     - Firebase/CoreOnly (~> 12.14.0)
     - Firebase/Firestore (~> 12.14.0)
     - firebase_core
@@ -1568,6 +1568,9 @@ PODS:
     - PromisesObjC (= 2.4.0)
   - screen_retriever_macos (0.0.1):
     - FlutterMacOS
+  - shared_preferences_foundation (0.0.1):
+    - Flutter
+    - FlutterMacOS
   - url_launcher_macos (0.0.1):
     - FlutterMacOS
   - window_manager (0.5.0):
@@ -1591,6 +1594,7 @@ DEPENDENCIES:
   - google_sign_in_ios (from `Flutter/ephemeral/.symlinks/plugins/google_sign_in_ios/darwin`)
   - package_info_plus (from `Flutter/ephemeral/.symlinks/plugins/package_info_plus/macos`)
   - screen_retriever_macos (from `Flutter/ephemeral/.symlinks/plugins/screen_retriever_macos/macos`)
+  - shared_preferences_foundation (from `Flutter/ephemeral/.symlinks/plugins/shared_preferences_foundation/darwin`)
   - url_launcher_macos (from `Flutter/ephemeral/.symlinks/plugins/url_launcher_macos/macos`)
   - window_manager (from `Flutter/ephemeral/.symlinks/plugins/window_manager/macos`)
 
@@ -1668,6 +1672,8 @@ EXTERNAL SOURCES:
     :path: Flutter/ephemeral/.symlinks/plugins/package_info_plus/macos
   screen_retriever_macos:
     :path: Flutter/ephemeral/.symlinks/plugins/screen_retriever_macos/macos
+  shared_preferences_foundation:
+    :path: Flutter/ephemeral/.symlinks/plugins/shared_preferences_foundation/darwin
   url_launcher_macos:
     :path: Flutter/ephemeral/.symlinks/plugins/url_launcher_macos/macos
   window_manager:
@@ -1678,7 +1684,7 @@ SPEC CHECKSUMS:
   AppAuth: 1c1a8afa7e12f2ec3a294d9882dfa5ab7d3cb063
   AppCheckCore: cc8fd0a3a230ddd401f326489c99990b013f0c4f
   BoringSSL-GRPC: dded2a44897e45f28f08ae87a55ee4bcd19bc508
-  cloud_firestore: 22c9bc77f6d374c34c7f13d012c159d2cea03c6e
+  cloud_firestore: febe21c133cb1b8aab92d8204b70d08bfdcf91d1
   cloud_functions: 711992ad51d11a83c850346a7458dbef3e70a1f5
   file_selector_macos: 9e9e068e90ebee155097d00e89ae91edb2374db7
   Firebase: 7cc10425300768ec86292688af5cb228f0604bde
@@ -1727,6 +1733,7 @@ SPEC CHECKSUMS:
   PromisesObjC: f5707f49cb48b9636751c5b2e7d227e43fba9f47
   PromisesSwift: 9d77319bbe72ebf6d872900551f7eeba9bce2851
   screen_retriever_macos: 452e51764a9e1cdb74b3c541238795849f21557f
+  shared_preferences_foundation: 7036424c3d8ec98dfe75ff1667cb0cd531ec82bb
   url_launcher_macos: f87a979182d112f911de6820aefddaf56ee9fbfd
   window_manager: b729e31d38fb04905235df9ea896128991cad99e
 
